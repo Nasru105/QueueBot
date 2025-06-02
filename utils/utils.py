@@ -1,3 +1,5 @@
+from datetime import datetime
+import pytz
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 # Безопасное удаление сообщения.
@@ -30,3 +32,8 @@ def reformat(queues_str, last_queue_message_str):
         last_queue_message[int(id)] = last_queue_message_str[id]
 
     return queues, last_queue_message
+
+def get_time():
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    moscow_time = datetime.now(moscow_tz)
+    return moscow_time.strftime("%H:%M:%S")
