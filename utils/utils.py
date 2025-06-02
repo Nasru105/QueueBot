@@ -13,9 +13,6 @@ def get_queue_keyboard():
         [
             InlineKeyboardButton("🔼 Встать в очередь", callback_data="join"),
             InlineKeyboardButton("🔽 Выйти", callback_data="leave")
-        ],
-        [
-            InlineKeyboardButton("🔄 Обновить", callback_data="refresh")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)

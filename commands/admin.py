@@ -68,6 +68,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Вставляем имя, если его нет
     if name not in q:
         q.insert(position, name)
+        print(f"{chat_id}: insert {name}")
 
     # Удаляем старое сообщение об очереди
     last_id = get_last_message_id(chat_id)
@@ -103,6 +104,8 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if name in q:
         q.remove(name)
+        print(f"{chat_id}: remove {name}")
+
 
     last_id = get_last_message_id(chat_id)
     await safe_delete(context, chat_id, last_id)
