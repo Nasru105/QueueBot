@@ -1,6 +1,9 @@
 from datetime import datetime
 import pytz
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, User
+
+from config import STUDENTS_USERNAMES
+
 
 # Безопасное удаление сообщения.
 async def safe_delete(context, chat_id, message_id):
@@ -38,5 +41,9 @@ def get_time():
     moscow_time = datetime.now(moscow_tz)
     return moscow_time.strftime("%H:%M:%S")
 
-def get_names_by_username():
-    pass
+def get_name(user: User):
+    if user.username in STUDENTS_USERNAMES:
+        name = STUDENTS_USERNAMES[user.username][0]
+    else:
+        name = f"{user.first_name} {user.last_name or ''}".strip()
+    return name

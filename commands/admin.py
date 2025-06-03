@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 from config import STUDENTS
 from services.queue_service import queues, last_queue_message, save_data, get_last_message_id, set_last_message_id, \
-    get_queue_message, get_queue, add_to_queue, sent_queue_message
+    get_queue_text, get_queue, add_to_queue, sent_queue_message
 from utils.utils import safe_delete, get_queue_keyboard, get_time
 
 
@@ -17,7 +17,6 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     admins = await context.bot.get_chat_administrators(chat_id)
     # Проверяем, является ли пользователь админом
     return any(admin.user.id == user_id for admin in admins)
-
 
 
 async def clear_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,35 +38,32 @@ async def clear_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
+
     await safe_delete(context, chat_id, message_id)
 
     if not await is_admin(update, context):
         return
 
     args = context.args
-    if len(args) < 2:
+    if not args:
         return
 
-    name = " ".join(args[:-1])
-    try:
-        position = int(args[-1]) - 1
-    except ValueError as ex:
-        print(f"ValueError: {ex}")
-        return
-
-    # Получаем или создаём очередь
     q = get_queue(chat_id)
 
-    # Гарантируем допустимую позицию
-    if position < 0:
-        position = 0
-    elif position > len(q):
+    # Разбираем имя и позицию
+    try:
+        position = int(args[-1]) - 1
+        name = " ".join(args[:-1])
+    except ValueError:
         position = len(q)
+        name = " ".join(args)
 
-    # Вставляем имя, если его нет
-    if name not in q:
+    # Корректируем позицию
+    position = max(0, min(position, len(q)))
+
+    if name and name not in q:
         q.insert(position, name)
-        print(f"{chat_id}: {get_time()} insert {name}")
+        print(f"{chat_id}: {get_time()} insert {name} ({position + 1})")
 
     await sent_queue_message(update, context)
 
@@ -75,24 +71,44 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
+
     await safe_delete(context, chat_id, message_id)
 
     if not await is_admin(update, context):
         return
 
     args = context.args
-    if len(args) < 1:
+    if not args:
         return
 
-    name = " ".join(args)
-
     q = get_queue(chat_id)
+    name = None
+    position = None
 
-    if name in q:
+    # Пытаемся распарсить позицию
+    try:
+        if len(args) == 1:
+            position = int(args[0]) - 1
+            if position < 0 or len(q) <= position:
+                raise ValueError
+        else:
+            name = " ".join(args)
+    except ValueError:
+        name = " ".join(args)
+
+    # Удаляем по позиции, если она допустима
+    if position is not None and 0 <= position < len(q):
+        name = q.pop(position)
+        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})")
+        await sent_queue_message(update, context)
+
+
+    # Или по имени
+    elif name in q:
+        position = q.index(name)
         q.remove(name)
-        print(f"{chat_id}: {get_time()} remove {name}")
-
-    await sent_queue_message(update, context)
+        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})")
+        await sent_queue_message(update, context)
 
 
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -115,7 +131,7 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent = await context.bot.send_message(
         chat_id=chat_id,
-        text=get_queue_message(chat_id),
+        text=get_queue_text(chat_id),
         reply_markup=get_queue_keyboard(),
         message_thread_id=message_thread_id
     )
@@ -145,12 +161,13 @@ async def generate_a_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent = await context.bot.send_message(
         chat_id=chat_id,
-        text=get_queue_message(chat_id),
+        text=get_queue_text(chat_id),
         reply_markup=get_queue_keyboard(),
         message_thread_id=message_thread_id
     )
 
     set_last_message_id(chat_id, sent.message_id)
+
 
 async def generate_b_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -174,11 +191,9 @@ async def generate_b_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent = await context.bot.send_message(
         chat_id=chat_id,
-        text=get_queue_message(chat_id),
+        text=get_queue_text(chat_id),
         reply_markup=get_queue_keyboard(),
         message_thread_id=message_thread_id
     )
 
     set_last_message_id(chat_id, sent.message_id)
-
-

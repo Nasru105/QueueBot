@@ -4,10 +4,10 @@ from telegram.error import TelegramError
 
 from services.queue_service import (
     add_to_queue, remove_from_queue,
-    get_queue_message, set_last_message_id,
+    get_queue_text, set_last_message_id,
     get_last_message_id, get_queue
 )
-from utils.utils import get_queue_keyboard, safe_delete
+from utils.utils import get_queue_keyboard, safe_delete, get_name
 
 
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -15,21 +15,21 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     user = query.from_user
-    f_user = f"{user.first_name} {user.last_name or ''}".strip()
+    name = get_name(user)
     chat_id = query.message.chat_id
     message_thread_id = query.message.message_thread_id
     data = query.data
 
-    if data == "join" and f_user not in get_queue(chat_id):
-        add_to_queue(chat_id, f_user)
-    elif data == "leave" and f_user in get_queue(chat_id):
-        remove_from_queue(chat_id, f_user)
+    if data == "join" and name not in get_queue(chat_id):
+        add_to_queue(chat_id, name)
+    elif data == "leave" and name in get_queue(chat_id):
+        remove_from_queue(chat_id, name)
     else:
         return
 
     sent = await context.bot.send_message(
         chat_id=chat_id,
-        text=get_queue_message(chat_id),
+        text=get_queue_text(chat_id),
         reply_markup=get_queue_keyboard(),
         message_thread_id=message_thread_id
     )
