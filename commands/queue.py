@@ -1,12 +1,8 @@
 from telegram.ext import ContextTypes, CallbackQueryHandler
-
 from services.queue_service import (
-    add_to_queue, remove_from_queue, get_queue, get_last_message_id,
-    set_last_message_id, get_queue_text, sent_queue_message
+    add_to_queue, remove_from_queue, get_queue, sent_queue_message
 )
-
-from utils.utils import safe_delete, get_queue_keyboard, get_name
-
+from utils.utils import safe_delete, get_name
 from telegram import Update
 
 

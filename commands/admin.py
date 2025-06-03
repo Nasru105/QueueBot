@@ -3,7 +3,7 @@ import random
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import STUDENTS
+from config import STUDENTS_USERNAMES
 from services.queue_service import queues, last_queue_message, save_data, get_last_message_id, set_last_message_id, \
     get_queue_text, get_queue, add_to_queue, sent_queue_message
 from utils.utils import safe_delete, get_queue_keyboard, get_time
@@ -101,10 +101,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = q.pop(position)
         print(f"{chat_id}: {get_time()} remove {name} ({position + 1})")
         await sent_queue_message(update, context)
-
-
-    # Или по имени
-    elif name in q:
+    elif name in q:  # Или по имени
         position = q.index(name)
         q.remove(name)
         print(f"{chat_id}: {get_time()} remove {name} ({position + 1})")
@@ -112,88 +109,29 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    message_id = update.message.message_id
-    await safe_delete(context, chat_id, message_id)
-    message_thread_id = update.message.message_thread_id
-
     if not await is_admin(update, context):
         return
 
-    # Перемешиваем студентов без повторений
-    random_STUDENTS = random.sample(STUDENTS, len(STUDENTS))
-    queues[chat_id] = []
-    for user in random_STUDENTS:
-        add_to_queue(chat_id, user[0])
-
-    last_id = get_last_message_id(chat_id)
-    await safe_delete(context, chat_id, last_id)
-
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=get_queue_text(chat_id),
-        reply_markup=get_queue_keyboard(),
-        message_thread_id=message_thread_id
-    )
-
-    set_last_message_id(chat_id, sent.message_id)
-
-
-async def generate_a_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
     await safe_delete(context, chat_id, message_id)
-    message_thread_id = update.message.message_thread_id
 
-    if not await is_admin(update, context):
-        return
+    # Обработка аргумента подгруппы
+    args = context.args
+    subgroup = args[0].upper() if args and args[0].upper() in ("A", "B") else None
 
-    # Перемешиваем студентов без повторений
-    random_STUDENTS = random.sample(STUDENTS, len(STUDENTS))
+    # Перемешиваем список студентов
+    all_students = list(STUDENTS_USERNAMES.values())
+    random.shuffle(all_students)
+
+    # Очищаем текущую очередь
     queues[chat_id] = []
 
-    for student in random_STUDENTS:
-        if student[1] == "А":
-            add_to_queue(chat_id, student[0])
+    # Добавляем пользователей в очередь по фильтру подгруппы (если задана)
+    for username, group in all_students:
+        if not subgroup or group == subgroup:
+            add_to_queue(chat_id, username)
 
-    last_id = get_last_message_id(chat_id)
-    await safe_delete(context, chat_id, last_id)
+    print(f"{chat_id}: {get_time()} сгенерирована очередь (подгруппа: {subgroup or 'все'})")
+    await sent_queue_message(update, context)
 
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=get_queue_text(chat_id),
-        reply_markup=get_queue_keyboard(),
-        message_thread_id=message_thread_id
-    )
-
-    set_last_message_id(chat_id, sent.message_id)
-
-
-async def generate_b_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    message_id = update.message.message_id
-    await safe_delete(context, chat_id, message_id)
-    message_thread_id = update.message.message_thread_id
-
-    if not await is_admin(update, context):
-        return
-
-    # Перемешиваем студентов без повторений
-    random_STUDENTS = random.sample(STUDENTS, len(STUDENTS))
-    queues[chat_id] = []
-
-    for student in random_STUDENTS:
-        if student[1] == "Б":
-            add_to_queue(chat_id, student[0])
-
-    last_id = get_last_message_id(chat_id)
-    await safe_delete(context, chat_id, last_id)
-
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=get_queue_text(chat_id),
-        reply_markup=get_queue_keyboard(),
-        message_thread_id=message_thread_id
-    )
-
-    set_last_message_id(chat_id, sent.message_id)

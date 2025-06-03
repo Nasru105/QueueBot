@@ -1,6 +1,5 @@
 from telegram.ext import ContextTypes
 from telegram import Update
-from telegram.error import TelegramError
 
 from services.queue_service import (
     add_to_queue, remove_from_queue,
