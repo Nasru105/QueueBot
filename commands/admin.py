@@ -5,8 +5,8 @@ from telegram.ext import ContextTypes
 
 from config import STUDENTS
 from services.queue_service import queues, last_queue_message, save_data, get_last_message_id, set_last_message_id, \
-    get_queue_message, get_queue, add_to_queue
-from utils.utils import safe_delete, get_queue_keyboard
+    get_queue_message, get_queue, add_to_queue, sent_queue_message
+from utils.utils import safe_delete, get_queue_keyboard, get_time
 
 
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -40,7 +40,6 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
     await safe_delete(context, chat_id, message_id)
-    message_thread_id = update.message.message_thread_id
 
     if not await is_admin(update, context):
         return
@@ -68,28 +67,15 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Вставляем имя, если его нет
     if name not in q:
         q.insert(position, name)
-        print(f"{chat_id}: insert {name}")
+        print(f"{chat_id}: {get_time()} insert {name}")
 
-    # Удаляем старое сообщение об очереди
-    last_id = get_last_message_id(chat_id)
-    await safe_delete(context, chat_id, last_id)
-
-    # Отправляем новое сообщение об очереди
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=get_queue_message(chat_id),
-        reply_markup=get_queue_keyboard(),
-        message_thread_id=message_thread_id
-    )
-
-    set_last_message_id(chat_id, sent.message_id)
+    await sent_queue_message(update, context)
 
 
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
     await safe_delete(context, chat_id, message_id)
-    message_thread_id = update.message.message_thread_id
 
     if not await is_admin(update, context):
         return
@@ -104,20 +90,9 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if name in q:
         q.remove(name)
-        print(f"{chat_id}: remove {name}")
+        print(f"{chat_id}: {get_time()} remove {name}")
 
-
-    last_id = get_last_message_id(chat_id)
-    await safe_delete(context, chat_id, last_id)
-
-    sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=get_queue_message(chat_id),
-        reply_markup=get_queue_keyboard(),
-        message_thread_id=message_thread_id
-    )
-
-    set_last_message_id(chat_id, sent.message_id)
+    await sent_queue_message(update, context)
 
 
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):

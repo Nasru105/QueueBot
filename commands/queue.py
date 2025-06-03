@@ -15,7 +15,6 @@ async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message_id = update.message.message_id
     await safe_delete(context, chat_id, message_id)
-
     name = f"{user.first_name} {user.last_name or ''}".strip()
     if name in get_queue(chat_id):
         return
