@@ -36,10 +36,10 @@ async def clear_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    chat = update.effective_chat
     message_id = update.message.message_id
 
-    await safe_delete(context, chat_id, message_id)
+    await safe_delete(context, chat.id, message_id)
 
     if not await is_admin(update, context):
         return
@@ -48,7 +48,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         return
 
-    q = get_queue(chat_id)
+    q = get_queue(chat.id)
 
     # Разбираем имя и позицию
     try:
@@ -63,16 +63,16 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if name and name not in q:
         q.insert(position, name)
-        print(f"{chat_id}: {get_time()} insert {name} ({position + 1})", flush=True)
+        print(f"{chat.title if chat.title else chat.username}: {get_time()} insert {name} ({position + 1})", flush=True)
 
     await sent_queue_message(update, context)
 
 
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    chat = update.effective_chat
     message_id = update.message.message_id
 
-    await safe_delete(context, chat_id, message_id)
+    await safe_delete(context, chat.id, message_id)
 
     if not await is_admin(update, context):
         return
@@ -81,7 +81,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         return
 
-    q = get_queue(chat_id)
+    q = get_queue(chat.id)
     name = None
     position = None
 
@@ -99,12 +99,12 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Удаляем по позиции, если она допустима
     if position is not None and 0 <= position < len(q):
         name = q.pop(position)
-        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})", flush=True)
+        print(f"{chat.title if chat.title else chat.username}: {get_time()} remove {name} ({position + 1})", flush=True)
         await sent_queue_message(update, context)
     elif name in q:  # Или по имени
         position = q.index(name)
         q.remove(name)
-        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})", flush=True)
+        print(f"{chat.title if chat.title else chat.username}: {get_time()} remove {name} ({position + 1})", flush=True)
         await sent_queue_message(update, context)
 
 
