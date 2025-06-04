@@ -63,7 +63,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if name and name not in q:
         q.insert(position, name)
-        print(f"{chat_id}: {get_time()} insert {name} ({position + 1})")
+        print(f"{chat_id}: {get_time()} insert {name} ({position + 1})", flush=True)
 
     await sent_queue_message(update, context)
 
@@ -99,12 +99,12 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Удаляем по позиции, если она допустима
     if position is not None and 0 <= position < len(q):
         name = q.pop(position)
-        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})")
+        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})", flush=True)
         await sent_queue_message(update, context)
     elif name in q:  # Или по имени
         position = q.index(name)
         q.remove(name)
-        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})")
+        print(f"{chat_id}: {get_time()} remove {name} ({position + 1})", flush=True)
         await sent_queue_message(update, context)
 
 

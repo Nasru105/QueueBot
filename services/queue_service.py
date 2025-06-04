@@ -12,7 +12,7 @@ def add_to_queue(chat, user):
     if user not in queues[chat.id]:  # Добавляем пользователя, если его ещё нет
         queues[chat.id].append(user)
         save_data(queues, last_queue_message)  # Сохраняем изменения
-        print(f"{chat.title if chat.title else chat.username}: {get_time()} join {user} ({len(queues[chat.id])})")
+        print(f"{chat.title if chat.title else chat.username}: {get_time()} join {user} ({len(queues[chat.id])})", flush=True)
 
 
 # Удаление пользователя из очереди
@@ -21,7 +21,7 @@ def remove_from_queue(chat, user):
     position = queues[chat.id].index(user)
     queues.get(chat.id, []).remove(user) if user in queues.get(chat.id, []) else None
     save_data(queues, last_queue_message)
-    print(f"{chat.title if chat.title else chat.username}: {get_time()} leave {user} ({position + 1})")
+    print(f"{chat.title if chat.title else chat.username}: {get_time()} leave {user} ({position + 1})", flush=True)
 
 
 # Получить очередь по chat_id

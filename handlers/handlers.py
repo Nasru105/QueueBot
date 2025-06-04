@@ -40,4 +40,4 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     set_last_message_id(chat.id, sent.message_id)
 
 async def error_handler(update, context):
-    print(f"Exception: {context.error}")
+    print(f"Exception: {context.error}", flush=True)
