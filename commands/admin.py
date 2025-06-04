@@ -112,9 +112,9 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update, context):
         return
 
-    chat_id = update.effective_chat.id
+    chat = update.effective_chat
     message_id = update.message.message_id
-    await safe_delete(context, chat_id, message_id)
+    await safe_delete(context, chat.id, message_id)
 
     # Обработка аргумента подгруппы
     args = context.args
@@ -125,13 +125,12 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     random.shuffle(all_students)
 
     # Очищаем текущую очередь
-    queues[chat_id] = []
+    queues[chat.id] = []
 
     # Добавляем пользователей в очередь по фильтру подгруппы (если задана)
     for username, group in all_students:
         if not subgroup or group == subgroup:
-            add_to_queue(chat_id, username)
+            add_to_queue(chat, username)
 
-    print(f"{chat_id}: {get_time()} сгенерирована очередь (подгруппа: {subgroup or 'все'})")
     await sent_queue_message(update, context)
 

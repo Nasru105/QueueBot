@@ -7,21 +7,21 @@ from utils.utils import reformat, safe_delete, get_queue_keyboard, get_time
 queues, last_queue_message = reformat(*load_data())
 
 # Добавление пользователя в очередь
-def add_to_queue(chat_id, user):
-    queues.setdefault(chat_id, [])  # Если для чата ещё нет очереди — создаём пустую
-    if user not in queues[chat_id]:  # Добавляем пользователя, если его ещё нет
-        queues[chat_id].append(user)
+def add_to_queue(chat, user):
+    queues.setdefault(chat.id, [])  # Если для чата ещё нет очереди — создаём пустую
+    if user not in queues[chat.id]:  # Добавляем пользователя, если его ещё нет
+        queues[chat.id].append(user)
         save_data(queues, last_queue_message)  # Сохраняем изменения
-        print(f"{chat_id}: {get_time()} join {user} ({len(queues[chat_id])})")
+        print(f"{chat.title if chat.title else chat.username}: {get_time()} join {user} ({len(queues[chat.id])})")
 
 
 # Удаление пользователя из очереди
-def remove_from_queue(chat_id, user):
+def remove_from_queue(chat, user):
     # Удаляем пользователя, если он есть, и сохраняем
-    position = queues[chat_id].index(user)
-    queues.get(chat_id, []).remove(user) if user in queues.get(chat_id, []) else None
+    position = queues[chat.id].index(user)
+    queues.get(chat.id, []).remove(user) if user in queues.get(chat.id, []) else None
     save_data(queues, last_queue_message)
-    print(f"{chat_id}: {get_time()} leave {user} ({position + 1})")
+    print(f"{chat.title if chat.title else chat.username}: {get_time()} leave {user} ({position + 1})")
 
 
 # Получить очередь по chat_id
