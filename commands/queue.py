@@ -1,4 +1,4 @@
-from telegram.ext import ContextTypes, CallbackQueryHandler
+from telegram.ext import ContextTypes
 from services.queue_service import (
     add_to_queue, remove_from_queue, get_queue, sent_queue_message
 )

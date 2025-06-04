@@ -4,9 +4,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import STUDENTS_USERNAMES
-from services.queue_service import queues, last_queue_message, save_data, get_last_message_id, set_last_message_id, \
-    get_queue_text, get_queue, add_to_queue, sent_queue_message
-from utils.utils import safe_delete, get_queue_keyboard, get_time
+from services.queue_service import queues, get_last_message_id, set_last_message_id, get_queue, add_to_queue, sent_queue_message
+from utils.utils import safe_delete, get_time
 
 
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -134,3 +133,27 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await sent_queue_message(update, context)
 
+async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_admin(update, context):
+        return
+
+    chat = update.effective_chat
+    message_id = update.message.message_id
+    await safe_delete(context, chat.id, message_id)
+
+    # Обработка аргумента подгруппы
+    args = context.args
+    subgroup = args[0].upper() if args and args[0].upper() in ("A", "B") else None
+
+    # Перемешиваем список студентов
+    all_students = list(STUDENTS_USERNAMES.values())
+
+    # Очищаем текущую очередь
+    queues[chat.id] = []
+
+    # Добавляем пользователей в очередь по фильтру подгруппы (если задана)
+    for username, group in all_students:
+        if not subgroup or group == subgroup:
+            add_to_queue(chat, username)
+
+    await sent_queue_message(update, context)
