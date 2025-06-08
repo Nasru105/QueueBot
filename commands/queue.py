@@ -10,7 +10,7 @@ async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
     message_id = update.message.message_id
-    await safe_delete(context, chat.id, message_id)
+    await safe_delete(context, chat, message_id)
     name = get_name(user)
     if name in get_queue(chat.id):
         return
@@ -24,7 +24,7 @@ async def leave(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = update.message.message_id
     user = update.effective_user
 
-    await safe_delete(context, chat.id, message_id)
+    await safe_delete(context, chat, message_id)
 
     name = get_name(user)
     if name not in get_queue(chat.id):
@@ -36,9 +36,9 @@ async def leave(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    chat = update.effective_chat
     message_id = update.message.message_id
 
-    await safe_delete(context, chat_id, message_id)
+    await safe_delete(context, chat, message_id)
 
     await sent_queue_message(update, context)

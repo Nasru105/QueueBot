@@ -44,18 +44,18 @@ def get_queue_text(chat_id):
     return text
 
 async def sent_queue_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    chat = update.effective_chat
     message_thread_id = update.message.message_thread_id
 
-    last_id = get_last_message_id(chat_id)
+    last_id = get_last_message_id(chat.id)
     if last_id:
-        await safe_delete(context, chat_id, last_id)
+        await safe_delete(context, chat, last_id)
 
     sent = await context.bot.send_message(
-        chat_id=chat_id,
-        text=get_queue_text(chat_id),
+        chat_id=chat.id,
+        text=get_queue_text(chat.id),
         reply_markup=get_queue_keyboard(),
         message_thread_id=message_thread_id
     )
 
-    set_last_message_id(chat_id, sent.message_id)
+    set_last_message_id(chat.id, sent.message_id)

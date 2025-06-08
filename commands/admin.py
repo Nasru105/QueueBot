@@ -19,26 +19,27 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
 
 
 async def clear_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    chat = update.effective_chat
     message_id = update.message.message_id
-    await safe_delete(context, chat_id, message_id)
+    await safe_delete(context, chat, message_id)
 
     if not await is_admin(update, context):
         return
 
-    queues[chat_id] = []
+    queues[chat.id] = []
+    print(f"{chat.title if chat.title else chat.username}: {get_time()} clear queue", flush=True)
 
-    last_id = get_last_message_id(chat_id)
-    await safe_delete(context, chat_id, last_id)
+    last_id = get_last_message_id(chat.id)
+    await safe_delete(context, chat, last_id)
 
-    set_last_message_id(chat_id, None)
+    set_last_message_id(chat.id, None)
 
 
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
 
-    await safe_delete(context, chat.id, message_id)
+    await safe_delete(context, chat, message_id)
 
     if not await is_admin(update, context):
         return
@@ -71,7 +72,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
 
-    await safe_delete(context, chat.id, message_id)
+    await safe_delete(context, chat, message_id)
 
     if not await is_admin(update, context):
         return
@@ -113,7 +114,7 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat = update.effective_chat
     message_id = update.message.message_id
-    await safe_delete(context, chat.id, message_id)
+    await safe_delete(context, chat, message_id)
 
     # Обработка аргумента подгруппы
     args = context.args
@@ -139,7 +140,7 @@ async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYP
 
     chat = update.effective_chat
     message_id = update.message.message_id
-    await safe_delete(context, chat.id, message_id)
+    await safe_delete(context, chat, message_id)
 
     # Обработка аргумента подгруппы
     args = context.args

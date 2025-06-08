@@ -6,7 +6,7 @@ from services.queue_service import (
     get_queue_text, set_last_message_id,
     get_last_message_id, get_queue
 )
-from utils.utils import get_queue_keyboard, safe_delete, get_name
+from utils.utils import get_queue_keyboard, safe_delete, get_name, get_time
 
 
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,9 +35,11 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     last_id = get_last_message_id(chat.id)
     if last_id:
-        await safe_delete(context, chat.id, last_id)
+        await safe_delete(context, chat, last_id)
 
     set_last_message_id(chat.id, sent.message_id)
 
 async def error_handler(update, context):
-    print(f"Exception: {context.error}", flush=True)
+    chat = update.effective_chat
+
+    print(f"{chat.title if chat.title else chat.username}: {get_time()} Exception: {context.error}", flush=True)
