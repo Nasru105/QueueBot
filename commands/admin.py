@@ -4,7 +4,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import STUDENTS_USERNAMES
-from services.queue_service import queues, get_last_message_id, set_last_message_id, get_queue, add_to_queue, sent_queue_message
+from services.queue_service import queues, get_last_message_id, set_last_message_id, get_queue, add_to_queue, \
+    sent_queue_message
 from utils.utils import safe_delete, get_time
 
 
@@ -108,6 +109,45 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await sent_queue_message(update, context)
 
 
+async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    message_id = update.message.message_id
+
+    await safe_delete(context, chat, message_id)
+
+    if not await is_admin(update, context):
+        return
+
+    args = context.args
+    if not args:
+        return
+    q = get_queue(chat.id)
+
+    if len(args) == 2:
+        try:
+            args = list(map(int, args))
+            position1 = max(args) - 1
+            position2 = min(args) - 1
+            if position1 == position2 or \
+                    position1 < 0 or len(q) - 1 < position1 or \
+                    position2 < 0 or len(q) - 1 < position2:
+                return
+        except ValueError:
+            return
+    else:
+        return
+
+    name1 = q.pop(position1)
+    name2 = q.pop(position2)
+    q.insert(position2, name1)
+    q.insert(position1, name2)
+    print(
+        f"{chat.title if chat.title else chat.username}: {get_time()} replace {name1} ({position1 + 1}) with {name2} ({position2 + 1})",
+        flush=True)
+
+    await sent_queue_message(update, context)
+
+
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update, context):
         return
@@ -133,6 +173,7 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_to_queue(chat, username)
 
     await sent_queue_message(update, context)
+
 
 async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update, context):
