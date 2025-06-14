@@ -118,31 +118,31 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update, context):
         return
 
-    args = context.args
-    if not args:
+    if not context.args or len(context.args) != 2:
         return
+
+    try:
+        pos1, pos2 = sorted(map(int, context.args))
+    except ValueError:
+        return
+
+    pos1 -= 1
+    pos2 -= 1
+
     q = get_queue(chat.id)
+    queue_length = len(q)
 
-    if len(args) == 2:
-        try:
-            args = list(map(int, args))
-            position1 = max(args) - 1
-            position2 = min(args) - 1
-            if position1 == position2 or \
-                    position1 < 0 or len(q) - 1 < position1 or \
-                    position2 < 0 or len(q) - 1 < position2:
-                return
-        except ValueError:
-            return
-    else:
+    if (pos1 == pos2 or
+            pos1 < 0 or pos2 < 0 or
+            pos1 >= queue_length or pos2 >= queue_length):
         return
 
-    name1 = q.pop(position1)
-    name2 = q.pop(position2)
-    q.insert(position2, name1)
-    q.insert(position1, name2)
+    # Perform the swap
+    name1 = q[pos1]
+    name2 = q[pos2]
+    q[pos1], q[pos2] = q[pos2], q[pos1]
     print(
-        f"{chat.title if chat.title else chat.username}: {get_time()} replace {name1} ({position1 + 1}) with {name2} ({position2 + 1})",
+        f"{chat.title if chat.title else chat.username}: {get_time()} replace {name1} ({pos1 + 1}) with {name2} ({pos2 + 1})",
         flush=True)
 
     await sent_queue_message(update, context)
