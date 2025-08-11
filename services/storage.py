@@ -1,25 +1,27 @@
 import json
 import os
 
-# Путь к файлу в папке проекта
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # директория, где лежит текущий скрипт
-FILE = os.path.join(BASE_DIR, "queue_data.json")  # файл будет рядом со скриптом
+# Получаем путь к корню проекта (на 2 уровня выше от storage.py)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".", ".."))
+
+DATA_DIR = os.path.join(BASE_DIR, "data")
+FILE = os.path.join(DATA_DIR, "queue_data.json")
 
 
 def load_data():
     if not os.path.exists(FILE):
-        return {}, {}
+        return {}
     with open(FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        return data.get("queues", {}), data.get("last_queue_message", {})
+        return json.load(f)
 
 
-def save_data(queues, last_queue_message):
-    os.makedirs(os.path.dirname(FILE), exist_ok=True)
+def save_data(data):
+    os.makedirs(DATA_DIR, exist_ok=True)
     with open(FILE, "w", encoding="utf-8") as f:
         json.dump(
-            {"queues": queues, "last_queue_message": last_queue_message},
+            data,
             f,
-            ensure_ascii=False,  #  ключ, чтобы писать символы как есть
-            indent=4,  #  красиво форматируем
+            ensure_ascii=False,
+            indent=4,
         )
+

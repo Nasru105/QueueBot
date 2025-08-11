@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 import pytz
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, User
@@ -25,6 +26,7 @@ async def start_help(update, context):
         message_thread_id=message_thread_id
     )
 
+
 # Безопасное удаление сообщения.
 async def safe_delete(context, chat, message_id):
     try:
@@ -33,32 +35,6 @@ async def safe_delete(context, chat, message_id):
         print(
             f"{chat.title if chat.title else chat.username}: {get_time()} Не удалось удалить сообщение {message_id}: {e}",
             flush=True)
-
-
-# Создание inline-клавиатуры для сообщений очереди.
-def get_queue_keyboard():
-    keyboard = [
-        [
-            InlineKeyboardButton("🔼 Встать в очередь", callback_data="join"),
-            InlineKeyboardButton("🔽 Выйти", callback_data="leave")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-# Преобразование строковых ключей из JSON обратно в словари с числовыми ключами.
-def reformat(queues_str, last_queue_message_str):
-    queues, last_queue_message = {}, {}
-
-    # Преобразуем ключи очередей в числа (chat_id)
-    for queue in queues_str:
-        queues[int(queue)] = queues_str[queue]
-
-    # Преобразуем ключи сообщений (chat_id) в числа
-    for id in last_queue_message_str:
-        last_queue_message[int(id)] = last_queue_message_str[id]
-
-    return queues, last_queue_message
 
 
 def get_time():
@@ -73,3 +49,8 @@ def get_name(user: User):
     else:
         name = f"{user.first_name} {user.last_name or ''}".strip()
     return name
+
+
+async def delete_later(context, chat, message_id, time=5):
+    await asyncio.sleep(time)
+    await safe_delete(context, chat, message_id)
