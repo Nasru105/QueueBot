@@ -19,13 +19,13 @@ def register_handlers(app):
     app.add_handler(CommandHandler("insert", insert_user))
     app.add_handler(CommandHandler("remove", remove_user))
     app.add_handler(CommandHandler("replace", replace_users))
-    #
+
     app.add_handler(CommandHandler("generate", generate_queue))
     app.add_handler(CommandHandler("getlist", get_list_of_students))
-    #
+
     app.add_handler(CallbackQueryHandler(handle_queue_button, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(handle_queues_button, pattern=r"^queues\|"))
-    # app.add_error_handler(error_handler)
+    app.add_error_handler(error_handler)
 
 
 async def set_commands(app):
