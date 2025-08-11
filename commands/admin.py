@@ -226,6 +226,9 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subgroup = args[-1].upper()
         if len(args) >= 2:
             queue_name = " ".join(args[:-1])
+        else:
+            count_queue = await queue_manager.get_count_queues(chat.id)
+            queue_name = f"Очередь {count_queue + 1}"
     else:
         queue_name = " ".join(args)
 

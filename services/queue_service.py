@@ -96,7 +96,7 @@ class QueueManager:
 
         return text
 
-    async def send_queue_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, queue_name="default"):
+    async def send_queue_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, queue_name):
         chat = update.effective_chat
         message_thread_id = update.message.message_thread_id if update.message else None
 
@@ -104,11 +104,14 @@ class QueueManager:
         if last_id:
             await safe_delete(context, chat, last_id)
 
+        queues = await queue_manager.get_queues(chat.id)
+        queue_index = list(queues).index(queue_name)
+
         sent = await context.bot.send_message(
             chat_id=chat.id,
             text=await self.get_queue_text(chat.id, queue_name),
             parse_mode="MarkdownV2",
-            reply_markup=queue_keyboard(queue_name),
+            reply_markup=queue_keyboard(queue_index),
             message_thread_id=message_thread_id
         )
 

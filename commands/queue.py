@@ -19,8 +19,11 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     queue_name = " ".join(context.args)
     if not queue_name:
-        count_queue = await queue_manager.get_count_queues(chat.id)
+        count_queue = 0
         queue_name = f"Очередь {count_queue + 1}"
+        while await queue_manager.get_queue(chat.id, queue_name):
+            count_queue += 1
+            queue_name = f"Очередь {count_queue }"
 
     await queue_manager.create_queue(chat, queue_name)
 
@@ -45,7 +48,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent = await context.bot.send_message(
             chat_id=chat.id,
             text="Выберите очередь:",
-            reply_markup=await queues_keyboard(queues_list),
+            reply_markup=await queues_keyboard(list(queues_list)),
             message_thread_id=message_thread_id
         )
         # Сохраняем новый message_id меню
