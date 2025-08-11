@@ -22,7 +22,7 @@ def admin_only(func):
     return wrapper
 
 
-# @admin_only
+@admin_only
 async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -45,7 +45,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.delete_queue(chat, queue_name)
 
 
-# @admin_only
+@admin_only
 async def delete_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -67,7 +67,7 @@ async def delete_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await queue_manager.delete_queue(chat, queue_name)
 
 
-# @admin_only
+@admin_only
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -113,7 +113,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
-# @admin_only
+@admin_only
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -170,7 +170,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await queue_manager.send_queue_message(update, context, queue_name)
 
 
-# @admin_only
+@admin_only
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -208,7 +208,7 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
-# @admin_only
+@admin_only
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -235,6 +235,42 @@ async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Перемешиваем список студентов
     all_students = list(STUDENTS_USERNAMES.values())
     random.shuffle(all_students)
+
+    await queue_manager.create_queue(chat, queue_name)
+
+    # Добавляем пользователей в очередь по фильтру подгруппы (если задана)
+    for username, group in all_students:
+        if not subgroup or group == subgroup:
+            await queue_manager.add_to_queue(chat, queue_name, username)
+
+    await queue_manager.send_queue_message(update, context, queue_name)
+
+@admin_only
+async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    message_id = update.message.message_id
+    await safe_delete(context, chat, message_id)
+
+    # Обработка аргумента подгруппы
+    args = context.args
+    subgroup = None
+
+    if not args:
+        count_queue = await queue_manager.get_count_queues(chat.id)
+        queue_name = f"Очередь {count_queue + 1}"
+
+    elif args[-1] and args[-1].upper() in ("A", "B"):
+        subgroup = args[-1].upper()
+        if len(args) >= 2:
+            queue_name = " ".join(args[:-1])
+        else:
+            count_queue = await queue_manager.get_count_queues(chat.id)
+            queue_name = f"Очередь {count_queue + 1}"
+    else:
+        queue_name = " ".join(args)
+
+    # Перемешиваем список студентов
+    all_students = list(STUDENTS_USERNAMES.values())
 
     await queue_manager.create_queue(chat, queue_name)
 

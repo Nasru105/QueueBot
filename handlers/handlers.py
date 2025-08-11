@@ -18,8 +18,9 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = query.from_user
     user_name = get_name(user)
     chat = query.message.chat
-    _, queue_index, action = query.data.split("|")
+    message_thread_id = query.message.message_thread_id
 
+    _, queue_index, action = query.data.split("|")
     queues = await queue_manager.get_queues(chat.id)
     queue_name = list(queues)[int(queue_index)]
 
@@ -30,7 +31,22 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         return
 
-    await queue_manager.send_queue_message(update, context, queue_name)
+    last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+    if last_id:
+        await safe_delete(context, chat, last_id)
+
+    queues = await queue_manager.get_queues(chat.id)
+    queue_index = list(queues).index(queue_name)
+
+    sent = await context.bot.send_message(
+        chat_id=chat.id,
+        text=await queue_manager.get_queue_text(chat.id, queue_name),
+        parse_mode="MarkdownV2",
+        reply_markup=queue_keyboard(queue_index),
+        message_thread_id=message_thread_id
+    )
+
+    await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
 
 
 async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -44,7 +60,23 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
     queue_name = list(queues).pop(int(queue_index))
 
     if action == "get":
-        await queue_manager.send_queue_message(update, context, queue_name)
+        message_thread_id = query.message.message_thread_id
+        last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+        if last_id:
+            await safe_delete(context, chat, last_id)
+
+        queues = await queue_manager.get_queues(chat.id)
+        queue_index = list(queues).index(queue_name)
+
+        sent = await context.bot.send_message(
+            chat_id=chat.id,
+            text=await queue_manager.get_queue_text(chat.id, queue_name),
+            parse_mode="MarkdownV2",
+            reply_markup=queue_keyboard(queue_index),
+            message_thread_id=message_thread_id
+        )
+
+        await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
 
     elif action == "delete":
         message = query.message
@@ -56,13 +88,11 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
         await queue_manager.delete_queue(message.chat, queue_name)
 
-        # Формируем новую клавиатуру без кнопок очереди
-        new_keyboard = await queues_keyboard(list(queues))
-
-        if not new_keyboard:  # если кнопок совсем не осталось
-            await safe_delete(context, chat, message.message_id)
-        else:
+        if list(queues):
+            new_keyboard = await queues_keyboard(list(queues))
             await message.edit_reply_markup(reply_markup=new_keyboard)
+        else:
+            await safe_delete(context, chat, message.message_id)
 
 
 async def error_handler(update, context):
