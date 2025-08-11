@@ -21,7 +21,7 @@ class QueueManager:
             }
             for chat, chat_data in self.data.items()
         }
-        print(json.dumps(self.data, ensure_ascii=False, indent=4))
+        # print(json.dumps(self.data, ensure_ascii=False, indent=4))
 
     async def save(self):
         save_data(self.data)
@@ -34,7 +34,7 @@ class QueueManager:
             self.data[chat.id]["queues"][queue_name] = {"queue": [], "last_queue_message_id": None}
 
         await self.save()
-        print(f"{chat.title if chat.title else chat.username}: create queue '{queue_name}'", flush=True)
+        print(f"{get_time()}|{chat.title if chat.title else chat.username}: create queue '{queue_name}'", flush=True)
 
     async def delete_queue(self, chat, queue_name):
         if chat.id in self.data and queue_name in self.data[chat.id]["queues"]:
@@ -45,9 +45,9 @@ class QueueManager:
                 del self.data[chat.id]
 
             await self.save()
-            print(f"{chat.title if chat.title else chat.username}: delete queue '{queue_name}'", flush=True)
+            print(f"{get_time()}|{chat.title if chat.title else chat.username}: delete queue '{queue_name}'", flush=True)
         else:
-            print(f"{chat.title if chat.title else chat.username}: queue '{queue_name}' not found in chat {chat.id}", flush=True)
+            print(f"{get_time()}|{chat.title if chat.title else chat.username}: queue '{queue_name}' not found in chat {chat.id}", flush=True)
 
     async def add_to_queue(self, chat, queue_name, user_name):
         if chat.id not in self.data:
@@ -59,7 +59,7 @@ class QueueManager:
         if user_name not in self.data[chat.id]["queues"][queue_name]["queue"]:
             self.data[chat.id]["queues"][queue_name]["queue"].append(user_name)
             await self.save()
-            print(f"{chat.title if chat.title else chat.username} queue '{queue_name}': {get_time()} join {user_name} ({len(self.data[chat.id]['queues'][queue_name]['queue'])})", flush=True)
+            print(f"{get_time()}|{chat.title if chat.title else chat.username}|{queue_name}: join {user_name} ({len(self.data[chat.id]['queues'][queue_name]['queue'])})", flush=True)
 
     async def remove_from_queue(self, chat, queue_name, user_name):
         if chat.id in self.data and queue_name in self.data[chat.id]["queues"]:
@@ -68,15 +68,15 @@ class QueueManager:
                 position = queue.index(user_name)
                 queue.remove(user_name)
                 await self.save()
-                print(f"{chat.title if chat.title else chat.username} queue '{queue_name}': {get_time()} leave {user_name} ({position + 1})", flush=True)
+                print(f"{get_time()}|{chat.title if chat.title else chat.username}|{queue_name}: leave {user_name} ({position + 1})", flush=True)
 
     async def get_queue(self, chat_id, queue_name):
         return self.data.get(chat_id, {}).get("queues", {}).get(queue_name, {}).get("queue", [])
 
-    async def get_last_message_id(self, chat_id, queue_name):
+    async def get_last_queue_message_id(self, chat_id, queue_name):
         return self.data.get(chat_id, {}).get("queues", {}).get(queue_name, {}).get("last_queue_message_id")
 
-    async def set_last_message_id(self, chat_id: int, queue_name: str, msg_id: int):
+    async def set_last_queue_message_id(self, chat_id: int, queue_name: str, msg_id: int):
         if chat_id not in self.data:
             self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
         if queue_name not in self.data[chat_id]["queues"]:
@@ -87,12 +87,12 @@ class QueueManager:
     async def get_queue_text(self, chat_id, queue_name):
         q = await self.get_queue(chat_id, queue_name)
         escaped_name = escape_markdown(queue_name, version=2)
-        text = f"*{escaped_name}*\n\n"
+        text = f"*`{escaped_name}`*\n\n"
 
         if not q:
-            text += "Очередь пуста\."
+            text += "Очередь пуста\\."
         else:
-            text += "\n".join(f"{i + 1}\. {u}" for i, u in enumerate(q))
+            text += "\n".join(f"{i + 1}\\. {u}" for i, u in enumerate(q))
 
         return text
 
@@ -100,7 +100,7 @@ class QueueManager:
         chat = update.effective_chat
         message_thread_id = update.message.message_thread_id if update.message else None
 
-        last_id = await self.get_last_message_id(chat.id, queue_name)
+        last_id = await self.get_last_queue_message_id(chat.id, queue_name)
         if last_id:
             await safe_delete(context, chat, last_id)
 
@@ -112,7 +112,7 @@ class QueueManager:
             message_thread_id=message_thread_id
         )
 
-        await self.set_last_message_id(chat.id, queue_name, sent.message_id)
+        await self.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
 
     async def get_count_queues(self, chat_id):
         queues = await self.get_queues(chat_id)

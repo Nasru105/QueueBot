@@ -55,7 +55,7 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
             # Обновляем сообщение с новой клавиатурой
             await message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(new_keyboard))
 
-        last_id = await queue_manager.get_last_message_id(chat.id, queue_name)
+        last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
         if last_id:
             await safe_delete(context, chat, last_id)
 

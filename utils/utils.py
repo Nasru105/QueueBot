@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 import pytz
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, User
+from telegram.helpers import escape_markdown
 
 from config import STUDENTS_USERNAMES
 
@@ -12,20 +13,22 @@ async def start_help(update, context):
     message_thread_id = update.message.message_thread_id
     await safe_delete(context, chat, message_id)
 
-    await context.bot.send_message(
-        chat_id=chat.id,
-        text="Этот бот позволяет вставать в очередь, выходить из неё, видеть текущую очередь. Используйте кнопки или команды:\n"
-             "/join – встать в очередь\n"
-             "/leave – выйти из очередь\n"
-             "/queue – посмотреть очередь\n\n"
-             "Команды для администраторов:\n"
-             "/clear - очистить очередь\n"
-             "/insert <Имя пользователя> <Индекс> - вставить  <Имя пользователя> на <Индекс> место в очереди\n"
-             "/remove <Имя пользователя> или <Индекс> - удалить <Имя пользователя> или <Индекс> из очереди\n"
-             "/replace <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n",
-        message_thread_id=message_thread_id
+    text = (
+        "/create <Имя очереди> - создает очередь\n"
+        "/queues - посмотреть активные очереди\n\n"
+        "Команды для администраторов:\n"
+        "/delete <Имя очереди> - удалить очередь\n"
+        "/delete_all - удалить все очереди\n"
+        "/insert <Имя очереди> <Имя пользователя> <Индекс> - вставить  <Имя пользователя> на <Индекс> место в очереди\n"
+        "/remove <Имя очереди> <Имя пользователя> или <Индекс> - удалить <Имя пользователя> или <Индекс> из очереди\n"
+        "/replace <Имя очереди> <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n"
     )
 
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=text,
+        message_thread_id = message_thread_id
+    )
 
 # Безопасное удаление сообщения.
 async def safe_delete(context, chat, message_id):
