@@ -1,10 +1,8 @@
 import asyncio
-from datetime import datetime
-import pytz
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, User
-from telegram.helpers import escape_markdown
+from telegram import User
 
 from config import STUDENTS_USERNAMES
+from services.queue_logger import QueueLogger
 
 
 async def start_help(update, context):
@@ -27,26 +25,19 @@ async def start_help(update, context):
     await context.bot.send_message(
         chat_id=chat.id,
         text=text,
-        message_thread_id = message_thread_id
+        message_thread_id=message_thread_id
     )
+
 
 # Безопасное удаление сообщения.
 async def safe_delete(context, chat, message_id):
     try:
         await context.bot.delete_message(chat_id=chat.id, message_id=message_id)
     except Exception as e:
-        print(
-            f"{chat.title if chat.title else chat.username}: {get_time()} Не удалось удалить сообщение {message_id}: {e}",
-            flush=True)
+        QueueLogger.log(chat.title or chat.username, action=f"Не удалось удалить сообщение {message_id}: {e}")
 
 
-def get_time():
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    moscow_time = datetime.now(moscow_tz)
-    return moscow_time.strftime("%D %H:%M:%S")
-
-
-def get_name(user: User):
+def get_user_name(user: User):
     if user.username in STUDENTS_USERNAMES:
         name = STUDENTS_USERNAMES[user.username][0]
     else:

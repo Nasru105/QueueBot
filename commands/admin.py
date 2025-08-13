@@ -5,8 +5,9 @@ from telegram.ext import ContextTypes
 from functools import wraps
 
 from config import STUDENTS_USERNAMES
+from services.queue_logger import QueueLogger
 from services.queue_service import queue_manager
-from utils.utils import safe_delete, get_time
+from utils.utils import safe_delete
 
 
 def admin_only(func):
@@ -20,6 +21,33 @@ def admin_only(func):
         return None
 
     return wrapper
+
+
+@admin_only
+async def admin_help(update, context):
+    chat = update.effective_chat
+    message_id = update.message.message_id
+    message_thread_id = update.message.message_thread_id
+    await safe_delete(context, chat, message_id)
+
+    text = (
+        "/create <Имя очереди> - создает очередь\n"
+        "/queues - посмотреть активные очереди\n\n"
+        "Команды для администраторов:\n"
+        "/delete <Имя очереди> - удалить очередь\n"
+        "/delete_all - удалить все очереди\n"
+        "/insert <Имя очереди> <Имя пользователя> <Индекс> - вставить  <Имя пользователя> на <Индекс> место в очереди\n"
+        "/remove <Имя очереди> <Имя пользователя> или <Индекс> - удалить <Имя пользователя> или <Индекс> из очереди\n"
+        "/replace <Имя очереди> <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n\n"
+        "/generate\n"
+        "/getlist\n"
+    )
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=text,
+        message_thread_id=message_thread_id
+    )
 
 
 @admin_only
@@ -82,7 +110,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     queue_name = None
     queue = []
     position = None
-    name = None
+    user_name = None
 
     for sep in range(1, len(args)):
         potential_queue_name = " ".join(args[:sep])
@@ -91,10 +119,10 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             queue = await queue_manager.get_queue(chat.id, queue_name)
             try:
                 position = int(args[-1]) - 1
-                name = " ".join(args[sep:-1])
+                user_name = " ".join(args[sep:-1])
             except ValueError:
                 position = len(queue)
-                name = " ".join(args[sep:])
+                user_name = " ".join(args[sep:])
             break
 
     if queue_name is None:
@@ -104,11 +132,9 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Корректируем позицию
     position = max(0, min(position, len(queue)))
 
-    if name and name not in queue:
-        queue.insert(position, name)
-        print(
-            f"{get_time()}|{chat.title if chat.title else chat.username}|{queue_name}: insert {name} ({position + 1})",
-            flush=True)
+    if user_name and user_name not in queue:
+        queue.insert(position, user_name)
+        QueueLogger.inserted(chat.title or chat.username, queue_name, user_name, position + 1)
 
     await queue_manager.send_queue_message(update, context, queue_name)
 
@@ -127,7 +153,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     list_queues = list(await queue_manager.get_queues(chat.id))
     queue_name = None
     queue = []
-    name = None
+    user_name = None
     position = None
 
     # Ищем имя очереди в первых аргументах
@@ -152,21 +178,17 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if position < 0 or position >= len(queue):
             raise ValueError
     except ValueError:
-        name = " ".join(remainder)
+        user_name = " ".join(remainder)
 
     # Удаляем по позиции, если она допустима
     if position is not None and 0 <= position < len(queue):
         removed_name = queue.pop(position)
-        print(
-            f"{get_time()}|{chat.title if chat.title else chat.username}|{queue_name}: remove {removed_name} ({position + 1})",
-            flush=True)
+        QueueLogger.removed(chat.title or chat.username, queue_name, removed_name, position + 1)
         await queue_manager.send_queue_message(update, context, queue_name)
-    elif name and name in queue:  # Или по имени
-        position = queue.index(name)
-        queue.remove(name)
-        print(
-            f"{get_time()}|{chat.title if chat.title else chat.username}|{queue_name}: remove {name} ({position + 1})",
-            flush=True)
+    elif user_name and user_name in queue:  # Или по имени
+        position = queue.index(user_name)
+        queue.remove(user_name)
+        QueueLogger.removed(chat.title or chat.username, queue_name, user_name, position + 1)
         await queue_manager.send_queue_message(update, context, queue_name)
 
 
@@ -197,84 +219,46 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Меняем местами
-    name1 = queue[pos1]
-    name2 = queue[pos2]
-    queue[pos1], queue[pos2] = name2, name1
+    user_name1 = queue[pos1]
+    user_name2 = queue[pos2]
+    queue[pos1], queue[pos2] = user_name2, user_name1
 
-    print(
-        f"{get_time()}|{chat.title if chat.title else chat.username}|{queue_name}: replace {name1} ({pos1 + 1}) with {name2} ({pos2 + 1})",
-        flush=True)
+    QueueLogger.replaced(chat.title or chat.username, queue_name, user_name1, pos1 + 1, user_name2, pos2 + 1)
 
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
 @admin_only
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    message_id = update.message.message_id
-    await safe_delete(context, chat, message_id)
+    await get_list_of_students(update, context, shuffle=True)
 
-    # Обработка аргумента подгруппы
-    args = context.args
-    subgroup = None
-
-    if not args:
-        count_queue = await queue_manager.get_count_queues(chat.id)
-        queue_name = f"Очередь {count_queue + 1}"
-
-    elif args[-1] and args[-1].upper() in ("A", "B"):
-        subgroup = args[-1].upper()
-        if len(args) >= 2:
-            queue_name = " ".join(args[:-1])
-        else:
-            count_queue = await queue_manager.get_count_queues(chat.id)
-            queue_name = f"Очередь {count_queue + 1}"
-    else:
-        queue_name = " ".join(args)
-
-    # Перемешиваем список студентов
-    all_students = list(STUDENTS_USERNAMES.values())
-    random.shuffle(all_students)
-
-    await queue_manager.create_queue(chat, queue_name)
-
-    # Добавляем пользователей в очередь по фильтру подгруппы (если задана)
-    for username, group in all_students:
-        if not subgroup or group == subgroup:
-            await queue_manager.add_to_queue(chat, queue_name, username)
-
-    await queue_manager.send_queue_message(update, context, queue_name)
 
 @admin_only
-async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE, shuffle: bool = False):
     chat = update.effective_chat
-    message_id = update.message.message_id
-    await safe_delete(context, chat, message_id)
+    await safe_delete(context, chat, update.message.message_id)
 
-    # Обработка аргумента подгруппы
     args = context.args
     subgroup = None
 
-    if not args:
-        count_queue = await queue_manager.get_count_queues(chat.id)
-        queue_name = f"Очередь {count_queue + 1}"
+    # Определяем подгруппу, если последний аргумент — A или B
+    if args and args[-1].upper() in ("A", "B"):
+        subgroup = args.pop(-1).upper()  # удаляем последний элемент
 
-    elif args[-1] and args[-1].upper() in ("A", "B"):
-        subgroup = args[-1].upper()
-        if len(args) >= 2:
-            queue_name = " ".join(args[:-1])
-        else:
-            count_queue = await queue_manager.get_count_queues(chat.id)
-            queue_name = f"Очередь {count_queue + 1}"
-    else:
+    # Определяем имя очереди
+    if args:
         queue_name = " ".join(args)
+    else:
+        queue_name = await queue_manager.get_queue_name(chat.id)
 
-    # Перемешиваем список студентов
+    # Получаем список студентов
     all_students = list(STUDENTS_USERNAMES.values())
+    if shuffle:
+        random.shuffle(all_students)
 
     await queue_manager.create_queue(chat, queue_name)
 
-    # Добавляем пользователей в очередь по фильтру подгруппы (если задана)
+    # Добавляем в очередь только нужную подгруппу (или всех)
     for username, group in all_students:
         if not subgroup or group == subgroup:
             await queue_manager.add_to_queue(chat, queue_name, username)

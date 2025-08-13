@@ -1,22 +1,21 @@
 from telegram.ext import ContextTypes
 from telegram import Update, InlineKeyboardMarkup
 
+from services.queue_logger import QueueLogger
 from services.queue_service import queue_manager
 from utils.InlineKeyboards import queue_keyboard, queues_keyboard
-# from services.queue_service import (
-#     add_to_queue, remove_from_queue,
-#     get_queue_text, set_last_message_id,
-#     get_last_message_id, get_queue
-# )
-from utils.utils import safe_delete, get_name, get_time
+from utils.utils import safe_delete, get_user_name
 
 
 async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обрабатывает нажатие кнопок внутри конкретной очереди (join/leave).
+    """
     query = update.callback_query
     await query.answer()
 
     user = query.from_user
-    user_name = get_name(user)
+    user_name = get_user_name(user)
     chat = query.message.chat
     message_thread_id = query.message.message_thread_id
 
@@ -24,20 +23,24 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     queues = await queue_manager.get_queues(chat.id)
     queue_name = list(queues)[int(queue_index)]
 
+    # Логика присоединения/выхода пользователя из очереди
     if action == "join" and user_name not in await queue_manager.get_queue(chat.id, queue_name):
         await queue_manager.add_to_queue(chat, queue_name, user_name)
     elif action == "leave" and user_name in await queue_manager.get_queue(chat.id, queue_name):
         await queue_manager.remove_from_queue(chat, queue_name, user_name)
     else:
-        return
+        return  # Игнорируем, если действие не применимо
 
+    # Удаляем старое сообщение очереди
     last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
     if last_id:
         await safe_delete(context, chat, last_id)
 
+    # Получаем актуальный индекс очереди (если список изменился)
     queues = await queue_manager.get_queues(chat.id)
     queue_index = list(queues).index(queue_name)
 
+    # Отправляем обновлённое сообщение
     sent = await context.bot.send_message(
         chat_id=chat.id,
         text=await queue_manager.get_queue_text(chat.id, queue_name),
@@ -50,17 +53,21 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обрабатывает нажатие кнопок списка всех очередей (get/delete).
+    """
     query = update.callback_query
     chat = query.message.chat
     await query.answer()
 
     _, queue_index, action = query.data.split("|")
-
     queues = await queue_manager.get_queues(chat.id)
     queue_name = list(queues).pop(int(queue_index))
 
+    # Показать очередь
     if action == "get":
         message_thread_id = query.message.message_thread_id
+
         last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
         if last_id:
             await safe_delete(context, chat, last_id)
@@ -78,10 +85,10 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
         await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
 
+    # Удалить очередь
     elif action == "delete":
         message = query.message
 
-        # Чистим последнее сообщение очереди
         last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
         if last_id:
             await safe_delete(context, chat, last_id)
@@ -96,6 +103,11 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def error_handler(update, context):
-    chat = update.effective_chat
+    """
+    Глобальный обработчик ошибок.
 
-    print(f"{chat.title if chat.title else chat.username}: {get_time()} Exception: {context.error}", flush=True)
+    Логирует все необработанные исключения, возникающие во время работы бота.
+
+    """
+    chat = update.effective_chat
+    QueueLogger.log(chat.title or chat.username, action=f"Exception: {context.error}")
