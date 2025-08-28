@@ -62,7 +62,16 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     _, queue_index, action = query.data.split("|")
     queues = await queue_manager.get_queues(chat.id)
-    queue_name = list(queues).pop(int(queue_index))
+
+    if action == "hide":
+        # Удаляем старое меню очередей, если есть
+        last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
+        if last_queues_id:
+            await safe_delete(context, chat, last_queues_id)
+        return
+
+    if queue_index != "all":
+        queue_name = list(queues).pop(int(queue_index))
 
     # Показать очередь
     if action == "get":
@@ -84,6 +93,22 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
         await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
+
+    elif action == "delete" and queue_index == "all":
+
+        # Удаляем старое меню очередей, если есть
+        last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
+        if last_queues_id:
+            await safe_delete(context, chat, last_queues_id)
+
+        queues = await queue_manager.get_queues(chat.id)
+        for queue_name in list(queues.keys()):
+
+            last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+            if last_id:
+                await safe_delete(context, chat, last_id)
+
+            await queue_manager.delete_queue(chat, queue_name)
 
     # Удалить очередь
     elif action == "delete":
