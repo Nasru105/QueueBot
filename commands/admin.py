@@ -6,7 +6,7 @@ from functools import wraps
 
 from config import STUDENTS_USERNAMES
 from services.queue_logger import QueueLogger
-from services.queue_service import queue_manager
+from services.queue_manager import queue_manager
 from utils.utils import safe_delete, parse_queue_args
 
 

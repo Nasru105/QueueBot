@@ -3,7 +3,7 @@ from telegram import Update, Chat
 from telegram.ext import ContextTypes
 from utils.InlineKeyboards import queues_keyboard
 from utils.utils import safe_delete, delete_later
-from services.queue_service import queue_manager
+from services.queue_manager import queue_manager
 
 async def start_help(update, context):
     chat = update.effective_chat

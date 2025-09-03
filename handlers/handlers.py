@@ -2,7 +2,7 @@ from telegram.ext import ContextTypes
 from telegram import Update, InlineKeyboardMarkup
 
 from services.queue_logger import QueueLogger
-from services.queue_service import queue_manager
+from services.queue_manager import queue_manager
 from utils.InlineKeyboards import queue_keyboard, queues_keyboard
 from utils.utils import safe_delete, get_user_name
 

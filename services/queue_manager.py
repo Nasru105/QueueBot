@@ -132,7 +132,7 @@ class QueueManager:
             await safe_delete(context, chat, last_id)
 
         # Получаем индекс очереди, чтобы правильно построить клавиатуру
-        queues = await queue_manager.get_queues(chat.id)
+        queues = await self.get_queues(chat.id)
         queue_index = list(queues).index(queue_name)
 
         # Отправляем сообщение
