@@ -7,7 +7,7 @@ from functools import wraps
 from config import STUDENTS_USERNAMES
 from services.queue_logger import QueueLogger
 from services.queue_service import queue_manager
-from utils.utils import safe_delete
+from utils.utils import safe_delete, parse_queue_args
 
 
 def admins_only(func):
@@ -38,7 +38,8 @@ async def admin_help(update, context):
         "/delete_all - удалить все очереди\n"
         "/insert <Имя очереди> <Имя пользователя> <Индекс> - вставить  <Имя пользователя> на <Индекс> место в очереди\n"
         "/remove <Имя очереди> <Имя пользователя> или <Индекс> - удалить <Имя пользователя> или <Индекс> из очереди\n"
-        "/replace <Имя очереди> <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n\n"
+        "/replace <Имя очереди> <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n"
+        "/rename <Старое имя очереди> <Новое имя очереди> - переименовать очередь\n\n"
         "/generate <Имя очереди> <Подгруппа>\n"
         "/getlist <Имя очереди> <Подгруппа>\n"
     )
@@ -97,39 +98,32 @@ async def delete_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admins_only
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Вставляет пользователя в очередь на указанную позицию.
+    Пример: /insert Очередь 1 Иван Иванов 2
+    """
     chat = update.effective_chat
-    message_id = update.message.message_id
-
-    await safe_delete(context, chat, message_id)
+    await safe_delete(context, chat, update.message.message_id)
 
     args = context.args
     if not args:
         return
 
-    list_queues = list(await queue_manager.get_queues(chat.id))
-    queue_name = None
-    queue = []
-    position = None
-    user_name = None
-
-    for sep in range(1, len(args)):
-        potential_queue_name = " ".join(args[:sep])
-        if potential_queue_name in list_queues:
-            queue_name = potential_queue_name
-            queue = await queue_manager.get_queue(chat.id, queue_name)
-            try:
-                position = int(args[-1]) - 1
-                user_name = " ".join(args[sep:-1])
-            except ValueError:
-                position = len(queue)
-                user_name = " ".join(args[sep:])
-            break
-
-    if queue_name is None:
-        # Не нашли очередь — можно отправить сообщение об ошибке или просто выйти
+    queues = list(await queue_manager.get_queues(chat.id))
+    queue_name, rest = parse_queue_args(args, queues)
+    if not queue_name:
         return
 
-    # Корректируем позицию
+    queue = await queue_manager.get_queue(chat.id, queue_name)
+
+    try:
+        position = int(rest[-1]) - 1
+        user_name = " ".join(rest[:-1])
+    except (ValueError, IndexError):
+        position = len(queue)
+        user_name = " ".join(rest)
+
+    # Ограничиваем позицию в пределах очереди
     position = max(0, min(position, len(queue)))
 
     if user_name and user_name not in queue:
@@ -139,57 +133,49 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
+
 @admins_only
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Удаляет пользователя из очереди по имени или позиции.
+    Пример: /remove Очередь 1 Иван Иванов
+            /remove Очередь 1 3
+    """
     chat = update.effective_chat
-    message_id = update.message.message_id
-
-    await safe_delete(context, chat, message_id)
+    await safe_delete(context, chat, update.message.message_id)
 
     args = context.args
     if not args:
         return
 
-    list_queues = list(await queue_manager.get_queues(chat.id))
-    queue_name = None
-    queue = []
-    user_name = None
+    queues = list(await queue_manager.get_queues(chat.id))
+    queue_name, rest = parse_queue_args(args, queues)
+    if not queue_name:
+        return
+
+    queue = await queue_manager.get_queue(chat.id, queue_name)
+
+    removed_name = None
     position = None
-
-    # Ищем имя очереди в первых аргументах
-    for sep in range(1, len(args)):
-        potential_queue_name = " ".join(args[:sep])
-        if potential_queue_name in list_queues:
-            queue_name = potential_queue_name
-            queue = await queue_manager.get_queue(chat.id, queue_name)
-            # Остальные аргументы - либо имя пользователя, либо индекс
-            remainder = args[sep:]
-            break
-
-    if queue_name is None:
-        return
-
-    if not remainder:
-        return
-
-    # Пытаемся распарсить позицию
+    print(queue_name, rest)
+    # Пробуем удалить по позиции
     try:
-        position = int(remainder[0]) - 1
-        if position < 0 or position >= len(queue):
+        position = int(rest[0]) - 1
+        if 0 <= position < len(queue):
+            removed_name = queue.pop(position)
+        else:
             raise ValueError
-    except ValueError:
-        user_name = " ".join(remainder)
+    except (ValueError, IndexError):
+        user_name = " ".join(rest).strip()
+        if user_name in queue:
+            position = queue.index(user_name)
+            queue.remove(user_name)
+            removed_name = user_name
 
-    # Удаляем по позиции, если она допустима
-    if position is not None and 0 <= position < len(queue):
-        removed_name = queue.pop(position)
+    if removed_name:
         QueueLogger.removed(chat.title or chat.username, queue_name, removed_name, position + 1)
         await queue_manager.send_queue_message(update, context, queue_name)
-    elif user_name and user_name in queue:  # Или по имени
-        position = queue.index(user_name)
-        queue.remove(user_name)
-        QueueLogger.removed(chat.title or chat.username, queue_name, user_name, position + 1)
-        await queue_manager.send_queue_message(update, context, queue_name)
+
 
 
 @admins_only
@@ -229,11 +215,6 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 @admins_only
-async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await get_list_of_students(update, context, shuffle=True)
-
-
-@admins_only
 async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE, shuffle: bool = False):
     chat = update.effective_chat
     await safe_delete(context, chat, update.message.message_id)
@@ -264,3 +245,37 @@ async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYP
             await queue_manager.add_to_queue(chat, queue_name, username)
 
     await queue_manager.send_queue_message(update, context, queue_name)
+
+
+@admins_only
+async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await get_list_of_students(update, context, shuffle=True)
+
+
+@admins_only
+async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    message_id = update.message.message_id
+
+    # Удаляем сообщение с командой, чтобы не засорять чат
+    await safe_delete(context, chat, message_id)
+
+    args = context.args
+    if not args:
+        return  # нет аргументов → ничего не делаем
+
+    # Получаем список всех очередей чата
+    queues = list(await queue_manager.get_queues(chat.id))
+
+    old_queue_name, new_queue_name = parse_queue_args(args, queues)
+    new_queue_name = " ".join(new_queue_name)
+
+    # Если имя не найдено или новое пустое — ничего не делаем
+    if not old_queue_name or not new_queue_name.strip():
+        return
+
+    # Переименовываем очередь
+    await queue_manager.rename_queue(chat, old_queue_name, new_queue_name)
+
+    # Обновляем сообщение с очередью (уже под новым именем)
+    await queue_manager.send_queue_message(update, context, new_queue_name)

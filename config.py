@@ -23,7 +23,6 @@ STUDENTS_USERNAMES = {
     "Lazylazyyy": ["Фокин Михаил", "A"],
     "mishka0206": ["Фоминцов Михаил", "B"],
     "iwillhave0rder": ["Цыренжапова Елизавета", "A"],
-    "Boblin_M0blin": ["Яфаев Алексей", "A"],
 }
 
 

@@ -5,6 +5,30 @@ from utils.InlineKeyboards import queues_keyboard
 from utils.utils import safe_delete, delete_later
 from services.queue_service import queue_manager
 
+async def start_help(update, context):
+    chat = update.effective_chat
+    message_id = update.message.message_id
+    message_thread_id = update.message.message_thread_id
+    await safe_delete(context, chat, message_id)
+
+    text = (
+        "/create <Имя очереди> - создает очередь\n"
+        "/queues - посмотреть активные очереди\n\n"
+        "Команды для администраторов:\n"
+        "/delete <Имя очереди> - удалить очередь\n"
+        "/delete_all - удалить все очереди\n"
+        "/insert <Имя очереди> <Имя пользователя> <Индекс> - вставить  <Имя пользователя> на <Индекс> место в очереди\n"
+        "/remove <Имя очереди> <Имя пользователя> или <Индекс> - удалить <Имя пользователя> или <Индекс> из очереди\n"
+        "/replace <Имя очереди> <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n"
+        "/rename <Старое имя очереди> <Новое имя очереди> - переименовать очередь\n\n"
+    )
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=text,
+        message_thread_id=message_thread_id
+    )
+
 
 async def create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """

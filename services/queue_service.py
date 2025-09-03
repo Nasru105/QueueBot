@@ -83,7 +83,7 @@ class QueueManager:
                 QueueLogger.leaved(chat.title or chat.username, queue_name, user_name, position + 1)
 
 
-    async def get_queue(self, chat_id: int, queue_name: str, ):
+    async def get_queue(self, chat_id: int, queue_name: str ):
         """Возвращает список пользователей в очереди"""
         return self.data.get(chat_id, {}).get("queues", {}).get(queue_name, {}).get("queue", [])
 
@@ -167,6 +167,24 @@ class QueueManager:
         if chat_id not in self.data:
             self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
         self.data[chat_id]["last_queues_message_id"] = msg_id
+        await self.save()
+
+    async def rename_queue(self, chat, old_queue_name: str, new_queue_name: str):
+        """Переименовывает очередь в чате"""
+        if chat.id not in self.data:
+            self.data[chat.id] = {"queues": {}, "last_queues_message_id": None}
+
+        queues = self.data[chat.id]["queues"]
+
+        # Если старая очередь существует – переносим её под новым именем
+        if old_queue_name in queues:
+            queues[new_queue_name] = queues.pop(old_queue_name)
+            QueueLogger.log(chat.title or chat.username, f"{old_queue_name} → {new_queue_name}", "rename queue")
+        else:
+            # Если не существует — просто создаём пустую с новым именем
+            queues[new_queue_name] = {"queue": [], "last_queue_message_id": None}
+            QueueLogger.log(chat.title or chat.username, new_queue_name, "create (rename fallback)")
+
         await self.save()
 
 
