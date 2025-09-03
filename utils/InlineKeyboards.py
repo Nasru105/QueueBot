@@ -23,7 +23,7 @@ async def queues_keyboard(queues_list):
         keyboard.append([button, delete_button])
     keyboard.append([
         InlineKeyboardButton(text="Скрыть", callback_data=f"queues|all|hide"),
-        InlineKeyboardButton(text="🗑️🗑️🗑️", callback_data=f"queues|all|delete")])
+        InlineKeyboardButton(text="Удалить все", callback_data=f"queues|all|delete")])
 
 
     return InlineKeyboardMarkup(keyboard)

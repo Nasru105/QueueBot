@@ -10,20 +10,20 @@ from services.queue_service import queue_manager
 from utils.utils import safe_delete
 
 
-def admin_only(func):
+def admins_only(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         user_id = update.effective_user.id
         chat = update.effective_chat
         member = await context.bot.get_chat_member(chat.id, user_id)
-        if member.status in ('administrator', 'creator'):
+        if not chat.title or member.status in ('administrator', 'creator'):
             return await func(update, context, *args, **kwargs)
         return None
 
     return wrapper
 
 
-@admin_only
+@admins_only
 async def admin_help(update, context):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -39,8 +39,8 @@ async def admin_help(update, context):
         "/insert <Имя очереди> <Имя пользователя> <Индекс> - вставить  <Имя пользователя> на <Индекс> место в очереди\n"
         "/remove <Имя очереди> <Имя пользователя> или <Индекс> - удалить <Имя пользователя> или <Индекс> из очереди\n"
         "/replace <Имя очереди> <Индекс1> <Индекс2> - поменять местами <Индекс1> и <Индекс2> в очереди\n\n"
-        "/generate\n"
-        "/getlist\n"
+        "/generate <Имя очереди> <Подгруппа>\n"
+        "/getlist <Имя очереди> <Подгруппа>\n"
     )
 
     await context.bot.send_message(
@@ -50,7 +50,7 @@ async def admin_help(update, context):
     )
 
 
-@admin_only
+@admins_only
 async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -73,7 +73,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.delete_queue(chat, queue_name)
 
 
-@admin_only
+@admins_only
 async def delete_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -95,7 +95,7 @@ async def delete_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await queue_manager.delete_queue(chat, queue_name)
 
 
-@admin_only
+@admins_only
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -139,7 +139,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
-@admin_only
+@admins_only
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -192,7 +192,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await queue_manager.send_queue_message(update, context, queue_name)
 
 
-@admin_only
+@admins_only
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -228,12 +228,12 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
-@admin_only
+@admins_only
 async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await get_list_of_students(update, context, shuffle=True)
 
 
-@admin_only
+@admins_only
 async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE, shuffle: bool = False):
     chat = update.effective_chat
     await safe_delete(context, chat, update.message.message_id)

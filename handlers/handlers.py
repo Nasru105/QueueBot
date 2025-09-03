@@ -57,6 +57,7 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
     Обрабатывает нажатие кнопок списка всех очередей (get/delete).
     """
     query = update.callback_query
+    user_id = query.from_user.id
     chat = query.message.chat
     await query.answer()
 
@@ -96,6 +97,9 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif action == "delete" and queue_index == "all":
 
+        member = await context.bot.get_chat_member(chat.id, user_id)
+        if chat.title and member.status not in ('administrator', 'creator'):
+            return
         # Удаляем старое меню очередей, если есть
         last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
         if last_queues_id:
@@ -113,6 +117,10 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
     # Удалить очередь
     elif action == "delete":
         message = query.message
+
+        member = await context.bot.get_chat_member(chat.id, user_id)
+        if chat.title and member.status not in ('administrator', 'creator'):
+            return
 
         last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
         if last_id:
