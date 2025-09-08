@@ -126,7 +126,12 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ограничиваем позицию в пределах очереди
     position = max(0, min(position, len(queue)))
 
-    if user_name and user_name not in queue:
+    if user_name:
+        if user_name in queue:
+            remove_position = queue.index(user_name)
+            queue.remove(user_name)
+            QueueLogger.removed(chat.title or chat.username, queue_name, user_name, remove_position + 1)
+
         queue.insert(position, user_name)
         QueueLogger.inserted(chat.title or chat.username, queue_name, user_name, position + 1)
 
@@ -157,7 +162,6 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     removed_name = None
     position = None
-    print(queue_name, rest)
     # Пробуем удалить по позиции
     try:
         position = int(rest[0]) - 1
