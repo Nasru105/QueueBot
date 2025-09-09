@@ -31,25 +31,32 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         return  # Игнорируем, если действие не применимо
 
+
+
     # Удаляем старое сообщение очереди
-    last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
-    if last_id:
-        await safe_delete(context, chat, last_id)
+    # last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+    # if last_id:
+    #     await safe_delete(context, chat, last_id)
 
     # Получаем актуальный индекс очереди (если список изменился)
     queues = await queue_manager.get_queues(chat.id)
     queue_index = list(queues).index(queue_name)
 
-    # Отправляем обновлённое сообщение
-    sent = await context.bot.send_message(
-        chat_id=chat.id,
+    await query.edit_message_text(
         text=await queue_manager.get_queue_text(chat.id, queue_name),
         parse_mode="MarkdownV2",
-        reply_markup=queue_keyboard(queue_index),
-        message_thread_id=message_thread_id
-    )
+        reply_markup=queue_keyboard(queue_index))
 
-    await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
+    # Отправляем обновлённое сообщение
+    # sent = await context.bot.send_message(
+    #     chat_id=chat.id,
+    #     text=await queue_manager.get_queue_text(chat.id, queue_name),
+    #     parse_mode="MarkdownV2",
+    #     reply_markup=queue_keyboard(queue_index),
+    #     message_thread_id=message_thread_id
+    # )
+
+    # await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
 
 
 async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
