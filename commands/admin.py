@@ -7,7 +7,7 @@ from functools import wraps
 from config import STUDENTS_USERNAMES
 from services.queue_logger import QueueLogger
 from services.queue_manager import queue_manager
-from utils.utils import safe_delete, parse_queue_args
+from utils.utils import safe_delete, parse_queue_args, update_existing_queues_info
 
 
 def admins_only(func):
@@ -72,6 +72,9 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_delete(context, chat, last_id)
 
     await queue_manager.delete_queue(chat, queue_name)
+
+    queues = await queue_manager.get_queues(chat.id)
+    await update_existing_queues_info(context.bot, queue_manager, chat, queues)
 
 
 @admins_only
@@ -138,7 +141,6 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
-
 @admins_only
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -179,7 +181,6 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if removed_name:
         QueueLogger.removed(chat.title or chat.username, queue_name, removed_name, position + 1)
         await queue_manager.send_queue_message(update, context, queue_name)
-
 
 
 @admins_only

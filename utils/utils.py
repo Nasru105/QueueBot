@@ -5,9 +5,7 @@ from telegram import User
 
 from config import STUDENTS_USERNAMES
 from services.queue_logger import QueueLogger
-
-
-
+from utils.InlineKeyboards import queue_keyboard
 
 
 # Безопасное удаление сообщения.
@@ -46,3 +44,21 @@ def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str],
         if candidate in queues:
             return candidate, args[i:]
     return None, []
+
+async def update_existing_queues_info(bot,queue_manager, chat, queues):
+    """
+    Обновление сообщений с очередями
+    """
+    for queue_index, (current_queue_name, queue_data) in enumerate(queues.items()):
+        message_id = queue_data.get("last_queue_message_id")
+
+        if message_id:
+            # Правильный способ получения сообщения по ID в python-telegram-bot
+            await bot.edit_message_text(
+                chat_id=chat.id,
+                message_id=message_id,
+                text=await queue_manager.get_queue_text(chat.id, current_queue_name),
+                parse_mode="MarkdownV2",
+                reply_markup=queue_keyboard(queue_index),
+            )
+

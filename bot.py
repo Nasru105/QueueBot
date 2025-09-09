@@ -10,4 +10,6 @@ TOKEN = os.getenv("TOKEN")
 app = ApplicationBuilder().token(TOKEN).post_init(set_commands).build()
 register_handlers(app)
 
+
+
 app.run_polling()

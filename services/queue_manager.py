@@ -82,8 +82,7 @@ class QueueManager:
                 await self.save()
                 QueueLogger.leaved(chat.title or chat.username, queue_name, user_name, position + 1)
 
-
-    async def get_queue(self, chat_id: int, queue_name: str ):
+    async def get_queue(self, chat_id: int, queue_name: str):
         """Возвращает список пользователей в очереди"""
         return self.data.get(chat_id, {}).get("queues", {}).get(queue_name, {}).get("queue", [])
 

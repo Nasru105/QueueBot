@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardMarkup
 from services.queue_logger import QueueLogger
 from services.queue_manager import queue_manager
 from utils.InlineKeyboards import queue_keyboard, queues_keyboard
-from utils.utils import safe_delete, get_user_name
+from utils.utils import safe_delete, get_user_name, update_existing_queues_info
 
 
 async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -30,8 +30,6 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         await queue_manager.remove_from_queue(chat, queue_name, user_name)
     else:
         return  # Игнорируем, если действие не применимо
-
-
 
     # Удаляем старое сообщение очереди
     # last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
@@ -134,6 +132,8 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
             await safe_delete(context, chat, last_id)
 
         await queue_manager.delete_queue(message.chat, queue_name)
+
+        await update_existing_queues_info(context.bot, queue_manager, chat, queues)
 
         if list(queues):
             new_keyboard = await queues_keyboard(list(queues))
