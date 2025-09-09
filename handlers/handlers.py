@@ -17,7 +17,7 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = query.from_user
     user_name = get_user_name(user)
     chat = query.message.chat
-    message_thread_id = query.message.message_thread_id
+    # message_thread_id = query.message.message_thread_id
 
     _, queue_index, action = query.data.split("|")
     queues = await queue_manager.get_queues(chat.id)
@@ -56,7 +56,7 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     #     message_thread_id=message_thread_id
     # )
 
-    # await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
+    await queue_manager.set_last_queue_message_id(chat.id, queue_name, query.message.message_id)
 
 
 async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
