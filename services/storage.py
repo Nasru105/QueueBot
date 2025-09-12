@@ -1,16 +1,17 @@
 import os
 import json
 
-DATA_DIR = "/data"  # путь к монтируемому тому в Railway
+# путь к директории "data" в текущей рабочей директории
+DATA_DIR = os.path.join(os.getcwd(), "data")
 FILE = os.path.join(DATA_DIR, "queue_data.json")
 
+print(FILE)  # покажет полный путь к файлу
 
 def load_data():
     if not os.path.exists(FILE):
         return {}
     with open(FILE, "r", encoding="utf-8") as f:
         return json.load(f)
-
 
 def save_data(data):
     os.makedirs(DATA_DIR, exist_ok=True)

@@ -15,7 +15,7 @@ class QueueLogger:
         """Возвращает текущее время в формате HH:MM:SS."""
         moscow_tz = pytz.timezone('Europe/Moscow')
         moscow_time = datetime.now(moscow_tz)
-        return moscow_time.strftime("%D %H:%M:%S")
+        return moscow_time.strftime("%d.%m.%Y %H:%M:%S")
 
     @classmethod
     def log(cls, chat_title: Optional[str] = "Unknown Chat", queue_name: str = "Unknown queue", action: str = "action") -> None:
