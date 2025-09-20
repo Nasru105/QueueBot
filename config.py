@@ -4,6 +4,7 @@ STUDENTS_USERNAMES = {
     "Nicoliaaaa": ("Беллер Николай", "B"),
     "id51229292219": ("Беляев Юрий", "A"),
     "ImmortalMamontovich": ("Бобов Владислав", "A"),
+    "lubeemkafr":("Вартанян Давид","B"),
     "Alexey_Vinogradoff": ("Виноградов Алексей", "B"),
     "nepon9ll": ("Горшенков Артём", "B"),
     "alex_topand": ("Ердеков Александр", "B"),
