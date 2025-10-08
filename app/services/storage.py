@@ -5,7 +5,7 @@ import json
 DATA_DIR = os.path.join(os.getcwd(), "data")
 FILE = os.path.join(DATA_DIR, "queue_data.json")
 
-print(FILE)  # покажет полный путь к файлу
+# print(FILE)  # покажет полный путь к файлу
 
 def load_data():
     if not os.path.exists(FILE):

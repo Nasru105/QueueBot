@@ -1,13 +1,11 @@
-import json
-
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
-from services.queue_logger import QueueLogger
-from services.storage import load_data, save_data
-from utils.InlineKeyboards import queue_keyboard
-from utils.utils import safe_delete
+from app.services.logger import QueueLogger
+from app.services.storage import load_data, save_data
+from app.utils.InlineKeyboards import queue_keyboard
+from app.utils.utils import safe_delete
 
 
 class QueueManager:

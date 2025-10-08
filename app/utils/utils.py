@@ -1,11 +1,12 @@
 import asyncio
-from typing import List, Optional
+import logging
+from typing import Optional
 
 from telegram import User
 
-from config import STUDENTS_USERNAMES
-from services.queue_logger import QueueLogger
-from utils.InlineKeyboards import queue_keyboard
+from app.config import STUDENTS_USERNAMES
+from app.services.logger import QueueLogger
+from app.utils.InlineKeyboards import queue_keyboard
 
 
 # Безопасное удаление сообщения.
@@ -13,7 +14,9 @@ async def safe_delete(context, chat, message_id):
     try:
         await context.bot.delete_message(chat_id=chat.id, message_id=message_id)
     except Exception as e:
-        QueueLogger.log(chat.title or chat.username, action=f"Не удалось удалить сообщение {message_id}: {e}")
+        QueueLogger.log(chat.title or chat.username,
+                        action=f"Не удалось удалить сообщение {message_id}: {e}",
+                        level=logging.WARNING)
 
 
 def get_user_name(user: User):
@@ -64,4 +67,4 @@ async def update_existing_queues_info(bot, queue_manager, chat, queues):
                     reply_markup=queue_keyboard(queue_index),
                 )
             except Exception as ex:
-                QueueLogger.log(chat.title or chat.username, current_queue_name,  action=f"Exception: {ex}")
+                QueueLogger.log(chat.title or chat.username, current_queue_name, str(ex), logging.ERROR)

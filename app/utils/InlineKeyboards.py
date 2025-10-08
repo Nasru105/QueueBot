@@ -16,7 +16,6 @@ async def queues_keyboard(queues_list):
 
     keyboard = []
     for i, queue_name in enumerate(queues_list):
-        print(i, queue_name)
         button = InlineKeyboardButton(text=f"{queue_name}", callback_data=f"queues|{i}|get")
         # Кнопка с иконкой корзины для удаления
         delete_button = InlineKeyboardButton(text="🗑️", callback_data=f"queues|{i}|delete")

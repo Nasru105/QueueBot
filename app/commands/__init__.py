@@ -1,9 +1,9 @@
 from telegram.ext import CommandHandler, CallbackQueryHandler
 
-from commands.admin import delete_queue, delete_queues, insert_user, remove_user, replace_users, generate_queue, \
+from app.commands.admin import delete_queue, delete_queues, insert_user, remove_user, replace_users, generate_queue, \
     get_list_of_students, admin_help, rename_queue
-from commands.queue import create, queues, start_help
-from handlers.handlers import handle_queue_button, error_handler, handle_queues_button
+from app.commands.queue import create, queues, start_help
+from app.handlers.handlers import handle_queue_button, error_handler, handle_queues_button
 
 
 def register_handlers(app):

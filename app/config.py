@@ -4,7 +4,7 @@ STUDENTS_USERNAMES = {
     "Nicoliaaaa": ("Беллер Николай", "B"),
     "id51229292219": ("Беляев Юрий", "A"),
     "ImmortalMamontovich": ("Бобов Владислав", "A"),
-    "lubeemkafr":("Вартанян Давид","B"),
+    "lubeemkafr":("Вартанян Давид","A"),
     "Alexey_Vinogradoff": ("Виноградов Алексей", "B"),
     "nepon9ll": ("Горшенков Артём", "B"),
     "alex_topand": ("Ердеков Александр", "B"),
@@ -19,9 +19,7 @@ STUDENTS_USERNAMES = {
     "Nasru105": ("Насибов Руслан", "B"),
     "Third_day_of_rain": ("Никифоров Данил", "A"),
     "Pointless128": ("Олеников Валерий", "A"),
-    "KOPATb14": ("Сарайкин Максим", "B"),
     "Darvi_l": ("Смольянинова Милана", "B"),
-    "Lazylazyyy": ("Фокин Михаил", "A"),
     "mishka0206": ("Фоминцов Михаил", "B"),
     "iwillhave0rder": ("Цыренжапова Елизавета", "A"),
 }

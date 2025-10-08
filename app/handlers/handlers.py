@@ -1,10 +1,12 @@
-from telegram.ext import ContextTypes
-from telegram import Update, InlineKeyboardMarkup
+import logging
 
-from services.queue_logger import QueueLogger
-from services.queue_manager import queue_manager
-from utils.InlineKeyboards import queue_keyboard, queues_keyboard
-from utils.utils import safe_delete, get_user_name, update_existing_queues_info
+from telegram.ext import ContextTypes
+from telegram import Update
+
+from app.services.logger import QueueLogger
+from app.services.queue_manager import queue_manager
+from app.utils.InlineKeyboards import queue_keyboard, queues_keyboard
+from app.utils.utils import safe_delete, get_user_name, update_existing_queues_info
 
 
 async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -142,12 +144,17 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
             await safe_delete(context, chat, message.message_id)
 
 
+
+
 async def error_handler(update, context):
     """
     Глобальный обработчик ошибок.
-
     Логирует все необработанные исключения, возникающие во время работы бота.
-
     """
     chat = update.effective_chat
-    QueueLogger.log(chat.title or chat.username, action=f"Exception: {context.error}")
+    QueueLogger.log(
+        chat_title=chat.title or chat.username,
+        action=f"Exception: {context.error}",
+        level=logging.ERROR
+    )
+
