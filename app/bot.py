@@ -1,10 +1,11 @@
 import os
 import time
 
-from commands import register_handlers, set_commands
 from dotenv import load_dotenv
-from services.logger import logger
 from telegram.ext import ApplicationBuilder
+
+from app.commands import register_handlers, set_commands
+from app.services.logger import logger
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")

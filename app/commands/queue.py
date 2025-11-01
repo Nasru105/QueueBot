@@ -1,9 +1,11 @@
 from asyncio import create_task
-from telegram import Update, Chat
+
+from telegram import Chat, Update
 from telegram.ext import ContextTypes
-from utils.InlineKeyboards import queues_keyboard
-from utils.utils import safe_delete, delete_later
-from services.queue_manager import queue_manager
+
+from ..services.queue_manager import queue_manager
+from ..utils.InlineKeyboards import queues_keyboard
+from ..utils.utils import delete_later, safe_delete
 
 
 async def start_help(update, context):

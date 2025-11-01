@@ -3,10 +3,10 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from services.logger import QueueLogger
-from services.queue_manager import queue_manager
-from utils.InlineKeyboards import queue_keyboard, queues_keyboard
-from utils.utils import get_user_name, safe_delete, update_existing_queues_info
+from ..services.logger import QueueLogger
+from ..services.queue_manager import queue_manager
+from ..utils.InlineKeyboards import queue_keyboard, queues_keyboard
+from ..utils.utils import get_user_name, safe_delete, update_existing_queues_info
 
 
 async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -144,9 +144,13 @@ async def error_handler(update, context):
     Глобальный обработчик ошибок.
     Логирует все необработанные исключения, возникающие во время работы бота.
     """
-    chat = update.effective_chat
+    if update and update.effective_chat:
+        chat_title = update.effective_chat.title or update.effective_chat.username
+    else:
+        chat_title = "Unknown Chat"
+
     QueueLogger.log(
-        chat_title=chat.title or chat.username,
+        chat_title=chat_title,
         action=f"Exception: {context.error}",
         level=logging.ERROR,
     )

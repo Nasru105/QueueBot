@@ -2,10 +2,10 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
-from services.logger import QueueLogger
-from services.storage import load_data, save_data
-from utils.InlineKeyboards import queue_keyboard
-from utils.utils import safe_delete
+from ..utils.InlineKeyboards import queue_keyboard
+from ..utils.utils import safe_delete
+from .logger import QueueLogger
+from .storage import load_data, save_data
 
 
 class QueueManager:

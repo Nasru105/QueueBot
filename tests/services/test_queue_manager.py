@@ -1,11 +1,13 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.queue_manager import QueueManager
 
 
 class FakeChat:
     """Фейковый чат для тестов"""
+
     def __init__(self, chat_id=1, title="TestChat"):
         self.id = chat_id
         self.title = title
@@ -15,15 +17,15 @@ class FakeChat:
 @pytest.fixture
 def qm():
     """Создаём новый QueueManager без данных"""
-    with patch("services.queue_manager.load_data", return_value={}):
+    with patch("app.services.queue_manager.load_data", return_value={}):
         return QueueManager()
 
 
 @pytest.mark.asyncio
 async def test_create_and_get_queue(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
-    mocker.patch("services.queue_manager.QueueLogger.log")
+    mocker.patch("app.services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.QueueLogger.log")
 
     await qm.create_queue(chat, "Очередь 1")
 
@@ -35,9 +37,9 @@ async def test_create_and_get_queue(qm, mocker):
 @pytest.mark.asyncio
 async def test_add_and_remove_user(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
-    mocker.patch("services.queue_manager.QueueLogger.joined")
-    mocker.patch("services.queue_manager.QueueLogger.leaved")
+    mocker.patch("app.services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.QueueLogger.joined")
+    mocker.patch("app.services.queue_manager.QueueLogger.leaved")
 
     await qm.create_queue(chat, "Очередь 1")
     await qm.add_to_queue(chat, "Очередь 1", "Иван")
@@ -53,8 +55,8 @@ async def test_add_and_remove_user(qm, mocker):
 @pytest.mark.asyncio
 async def test_delete_queue(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
-    mocker.patch("services.queue_manager.QueueLogger.log")
+    mocker.patch("app.services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.QueueLogger.log")
 
     await qm.create_queue(chat, "Очередь 1")
     assert "Очередь 1" in await qm.get_queues(chat.id)
@@ -67,8 +69,8 @@ async def test_delete_queue(qm, mocker):
 @pytest.mark.asyncio
 async def test_rename_queue_existing(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
-    mocker.patch("services.queue_manager.QueueLogger.log")
+    mocker.patch("app.services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.QueueLogger.log")
 
     await qm.create_queue(chat, "Очередь 1")
     await qm.add_to_queue(chat, "Очередь 1", "Иван")
@@ -83,8 +85,8 @@ async def test_rename_queue_existing(qm, mocker):
 @pytest.mark.asyncio
 async def test_rename_queue_not_existing_creates_new(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
-    mocker.patch("services.queue_manager.QueueLogger.log")
+    mocker.patch("app.services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.QueueLogger.log")
 
     await qm.rename_queue(chat, "Неизвестная", "Новая")
 
@@ -96,7 +98,7 @@ async def test_rename_queue_not_existing_creates_new(qm, mocker):
 @pytest.mark.asyncio
 async def test_get_queue_text(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.save_data")
     await qm.create_queue(chat, "Очередь 1")
 
     # Пустая очередь
@@ -114,9 +116,9 @@ async def test_get_queue_text(qm, mocker):
 @pytest.mark.asyncio
 async def test_send_queue_message_creates_message(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
-    mocker.patch("services.queue_manager.safe_delete", new_callable=AsyncMock)
-    mocker.patch("services.queue_manager.queue_keyboard", return_value="keyboard")
+    mocker.patch("app.services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.safe_delete", new_callable=AsyncMock)
+    mocker.patch("app.services.queue_manager.queue_keyboard", return_value="keyboard")
 
     # создаём очередь с пользователями
     await qm.create_queue(chat, "Очередь 1")
@@ -151,7 +153,9 @@ async def test_send_queue_message_creates_message(qm, mocker):
 async def test_send_queue_message_deletes_previous(qm, mocker):
     chat = FakeChat()
     mocker.patch("services.queue_manager.save_data")
-    fake_delete = mocker.patch("services.queue_manager.safe_delete", new_callable=AsyncMock)
+    fake_delete = mocker.patch(
+        "services.queue_manager.safe_delete", new_callable=AsyncMock
+    )
     mocker.patch("services.queue_manager.queue_keyboard", return_value="keyboard")
 
     # создаём очередь и сохраняем старый message_id
@@ -174,4 +178,3 @@ async def test_send_queue_message_deletes_previous(qm, mocker):
     args, kwargs = fake_delete.call_args
     assert args[1].id == chat.id  # второй аргумент — chat
     assert args[2] == 99  # третий аргумент — message_id
-

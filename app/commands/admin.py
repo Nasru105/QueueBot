@@ -1,13 +1,13 @@
 import random
+from functools import wraps
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from functools import wraps
 
-from config import STUDENTS_USERNAMES
-from services.logger import QueueLogger
-from services.queue_manager import queue_manager
-from utils.utils import safe_delete, parse_queue_args, update_existing_queues_info
+from ..config import STUDENTS_USERNAMES
+from ..services.logger import QueueLogger
+from ..services.queue_manager import queue_manager
+from ..utils.utils import parse_queue_args, safe_delete, update_existing_queues_info
 
 
 def admins_only(func):

@@ -4,9 +4,9 @@ from typing import Optional
 
 from telegram import User
 
-from config import STUDENTS_USERNAMES
-from services.logger import QueueLogger
-from utils.InlineKeyboards import queue_keyboard
+from ..config import STUDENTS_USERNAMES
+from ..services.logger import QueueLogger
+from .InlineKeyboards import queue_keyboard
 
 
 # Безопасное удаление сообщения.
