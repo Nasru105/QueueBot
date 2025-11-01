@@ -89,5 +89,5 @@ class QueueLogger:
         cls.log(
             chat_title,
             queue_name,
-            f"replace {user_name1} ({pos1}) with {user_name2} ({pos2})",
+            f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})",
         )

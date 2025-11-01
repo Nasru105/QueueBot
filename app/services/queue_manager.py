@@ -1,3 +1,5 @@
+import logging
+
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
@@ -29,20 +31,88 @@ class QueueManager:
         """Сохраняет текущее состояние self.data в JSON-файл"""
         save_data(self.data)
 
-    async def update_queue_message(self, chat, query, queue_name: str):
+    async def update_queue_message(
+        self,
+        chat,
+        query_or_update,
+        queue_name: str,
+        context: ContextTypes.DEFAULT_TYPE | None = None,
+    ):
+        """
+        Пытается обновить существующее сообщение очереди.
+        Если редактирование не удалось — отправляет новое сообщение с очередью.
+
+        :param chat: объект чата (с атрибутом id и title)
+        :param query_or_update: CallbackQuery или Update или объект с полем message
+        :param queue_name: имя очереди
+        :param context: (опционально) Context, необходимый для отправки нового сообщения
+        """
         # Получаем актуальный индекс очереди (если список изменился)
         queues = await queue_manager.get_queues(chat.id)
         queue_index = list(queues).index(queue_name)
 
-        await query.edit_message_text(
-            text=await queue_manager.get_queue_text(chat.id, queue_name),
-            parse_mode="MarkdownV2",
-            reply_markup=queue_keyboard(queue_index),
-        )
+        # Функция, возвращающая текст очереди и клавиатуру
+        text = await self.get_queue_text(chat.id, queue_name)
+        keyboard = queue_keyboard(queue_index)
 
-        await queue_manager.set_last_queue_message_id(
-            chat.id, queue_name, query.message.message_id
-        )
+        # Попытаемся отредактировать сообщение в зависимости от типа переданного объекта
+        try:
+            # Если передан CallbackQuery или объект, у которого есть edit_message_text
+            if hasattr(query_or_update, "edit_message_text"):
+                await query_or_update.edit_message_text(
+                    text=text, parse_mode="MarkdownV2", reply_markup=keyboard
+                )
+                message_id = query_or_update.message.message_id
+
+            # Если передан Update или другой объект с message == None, попробуем
+            # отредактировать по сохранённому last_queue_message_id через bot
+            else:
+                last_id = await self.get_last_queue_message_id(chat.id, queue_name)
+                if last_id and context is not None:
+                    await context.bot.edit_message_text(
+                        chat_id=chat.id,
+                        message_id=last_id,
+                        text=text,
+                        parse_mode="MarkdownV2",
+                        reply_markup=keyboard,
+                    )
+                    message_id = last_id
+                else:
+                    # Нечего редактировать — выбрасываем исключение, чтобы перейти к отправке нового
+                    raise RuntimeError("no editable message found")
+
+        except Exception as ex:
+            # Логируем ошибку редактирования и отправляем новое сообщение (если есть context)
+            QueueLogger.log(
+                chat.title or chat.username, queue_name, str(ex), level=logging.ERROR
+            )
+            if context is not None:
+                sent = await context.bot.send_message(
+                    chat_id=chat.id,
+                    text=text,
+                    parse_mode="MarkdownV2",
+                    reply_markup=keyboard,
+                )
+                await self.set_last_queue_message_id(
+                    chat.id, queue_name, sent.message_id
+                )
+            else:
+                # Если контекста нет, попробуем ответить через переданный объект (если есть message)
+                try:
+                    if hasattr(query_or_update, "message") and query_or_update.message:
+                        sent = await query_or_update.message.reply_text(
+                            text=text, reply_markup=keyboard, parse_mode="MarkdownV2"
+                        )
+                        await self.set_last_queue_message_id(
+                            chat.id, queue_name, sent.message_id
+                        )
+                except Exception:
+                    # Ничего не можем сделать без context
+                    return
+            return
+
+        # Если редактирование прошло успешно — сохраняем id отредактированного сообщения
+        await self.set_last_queue_message_id(chat.id, queue_name, message_id)
 
     async def create_queue(self, chat, queue_name):
         """Создаёт новую очередь с указанным названием"""

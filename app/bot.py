@@ -4,6 +4,18 @@ import time
 from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder
 
+# If the module is executed directly (python app/bot.py), the package
+# imports like `from app.commands` will fail because the parent package
+# isn't on sys.path. In that case, add the project root to sys.path so
+# absolute package imports keep working. Prefer `python -m app.bot`.
+if __package__ is None:
+    import sys
+    from pathlib import Path
+
+    project_root = str(Path(__file__).resolve().parent.parent)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
 from app.commands import register_handlers, set_commands
 from app.services.logger import logger
 

@@ -141,7 +141,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat.title or chat.username, queue_name, user_name, position + 1
         )
 
-    await queue_manager.send_queue_message(update, context, queue_name)
+    await queue_manager.update_queue_message(chat, update, queue_name, context)
 
 
 @admins_only
@@ -185,7 +185,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         QueueLogger.removed(
             chat.title or chat.username, queue_name, removed_name, position + 1
         )
-        await queue_manager.send_queue_message(update, context, queue_name)
+        await queue_manager.update_queue_message(chat, update, queue_name, context)
 
 
 @admins_only
@@ -232,7 +232,7 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pos2 + 1,
     )
 
-    await queue_manager.send_queue_message(update, context, queue_name)
+    await queue_manager.update_queue_message(chat, update, queue_name, context)
 
 
 @admins_only
@@ -301,4 +301,4 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_manager.rename_queue(chat, old_queue_name, new_queue_name)
 
     # Обновляем сообщение с очередью (уже под новым именем)
-    await queue_manager.send_queue_message(update, context, new_queue_name)
+    await queue_manager.update_queue_message(chat, update, new_queue_name, context)

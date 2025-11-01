@@ -51,7 +51,7 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     #     message_thread_id=message_thread_id
     # )
 
-    await queue_manager.update_queue_message(chat, query, queue_name)
+    await queue_manager.update_queue_message(chat, query, queue_name, context)
 
 
 async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
