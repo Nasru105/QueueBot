@@ -1,4 +1,5 @@
 import logging
+from asyncio import Lock
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -7,6 +8,9 @@ from ..services.logger import QueueLogger
 from ..services.queue_manager import queue_manager
 from ..utils.InlineKeyboards import queue_keyboard, queues_keyboard
 from ..utils.utils import get_user_name, safe_delete, update_existing_queues_info
+
+# Глобальный лок для синхронизации операций с очередями
+queues_lock = Lock()
 
 
 async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -23,33 +27,37 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     _, queue_index, action = query.data.split("|")
     queues = await queue_manager.get_queues(chat.id)
-    queue_name = list(queues)[int(queue_index)]
+    try:
+        queue_index = int(queue_index)
+        if not (0 <= queue_index < len(queues)):
+            QueueLogger.log(
+                chat.title or chat.username,
+                action="Invalid queue index",
+                level=logging.WARNING,
+            )
+            return
+        queue_name = list(queues)[queue_index]
+    except ValueError:
+        QueueLogger.log(
+            chat.title or chat.username,
+            action="Invalid queue index format",
+            level=logging.WARNING,
+        )
+        return
 
-    # Логика присоединения/выхода пользователя из очереди
-    if action == "join" and user_name not in await queue_manager.get_queue(
-        chat.id, queue_name
-    ):
-        await queue_manager.add_to_queue(chat, queue_name, user_name)
-    elif action == "leave" and user_name in await queue_manager.get_queue(
-        chat.id, queue_name
-    ):
-        await queue_manager.remove_from_queue(chat, queue_name, user_name)
-    else:
-        return  # Игнорируем, если действие не применимо
-
-    # Удаляем старое сообщение очереди
-    # last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
-    # if last_id:
-    #     await safe_delete(context, chat, last_id)
-
-    # Отправляем обновлённое сообщение
-    # sent = await context.bot.send_message(
-    #     chat_id=chat.id,
-    #     text=await queue_manager.get_queue_text(chat.id, queue_name),
-    #     parse_mode="MarkdownV2",
-    #     reply_markup=queue_keyboard(queue_index),
-    #     message_thread_id=message_thread_id
-    # )
+    # Используем лок для атомарности операций с очередью
+    async with queues_lock:
+        # Логика присоединения/выхода пользователя из очереди
+        if action == "join" and user_name not in await queue_manager.get_queue(
+            chat.id, queue_name
+        ):
+            await queue_manager.add_to_queue(chat, queue_name, user_name)
+        elif action == "leave" and user_name in await queue_manager.get_queue(
+            chat.id, queue_name
+        ):
+            await queue_manager.remove_from_queue(chat, queue_name, user_name)
+        else:
+            return  # Игнорируем, если действие не применимо
 
     await queue_manager.update_queue_message(chat, query, queue_name, context)
 
@@ -71,10 +79,27 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
         last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
         if last_queues_id:
             await safe_delete(context, chat, last_queues_id)
+            await queue_manager.delete_last_queues_message_id(chat.id, last_queues_id)
         return
 
     if queue_index != "all":
-        queue_name = list(queues).pop(int(queue_index))
+        try:
+            queue_index = int(queue_index)
+            if not (0 <= queue_index < len(queues)):
+                QueueLogger.log(
+                    chat.title or chat.username,
+                    action="Invalid queue index in queues menu",
+                    level=logging.WARNING,
+                )
+                return
+            queue_name = list(queues)[queue_index]
+        except ValueError:
+            QueueLogger.log(
+                chat.title or chat.username,
+                action="Invalid queue index format in queues menu",
+                level=logging.WARNING,
+            )
+            return
 
     # Показать очередь
     if action == "get":
@@ -103,18 +128,22 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
         member = await context.bot.get_chat_member(chat.id, user_id)
         if chat.title and member.status not in ("administrator", "creator"):
             return
-        # Удаляем старое меню очередей, если есть
-        last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
-        if last_queues_id:
-            await safe_delete(context, chat, last_queues_id)
 
-        queues = await queue_manager.get_queues(chat.id)
-        for queue_name in list(queues.keys()):
-            last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
-            if last_id:
-                await safe_delete(context, chat, last_id)
+        async with queues_lock:
+            # Удаляем старое меню очередей, если есть
+            last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
+            if last_queues_id:
+                await safe_delete(context, chat, last_queues_id)
 
-            await queue_manager.delete_queue(chat, queue_name)
+            queues = await queue_manager.get_queues(chat.id)
+            for queue_name in list(queues.keys()):
+                last_id = await queue_manager.get_last_queue_message_id(
+                    chat.id, queue_name
+                )
+                if last_id:
+                    await safe_delete(context, chat, last_id)
+
+                await queue_manager.delete_queue(chat, queue_name)
 
     # Удалить очередь
     elif action == "delete":

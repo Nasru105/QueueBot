@@ -48,7 +48,7 @@ class QueueManager:
         :param context: (опционально) Context, необходимый для отправки нового сообщения
         """
         # Получаем актуальный индекс очереди (если список изменился)
-        queues = await queue_manager.get_queues(chat.id)
+        queues = await self.get_queues(chat.id)
         queue_index = list(queues).index(queue_name)
 
         # Функция, возвращающая текст очереди и клавиатуру
@@ -284,6 +284,11 @@ class QueueManager:
         if chat_id not in self.data:
             self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
         self.data[chat_id]["last_queues_message_id"] = msg_id
+        await self.save()
+
+    async def delete_last_queues_message_id(self, chat_id: int, msg_id: int):
+        """Удалаяет ID последнего сообщения со списком всех очередей"""
+        self.data[chat_id]["last_queues_message_id"] = None
         await self.save()
 
     async def rename_queue(self, chat, old_queue_name: str, new_queue_name: str):

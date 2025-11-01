@@ -27,6 +27,12 @@ RETRY_DELAY = 15  # секунд между попытками
 
 
 def main():
+    if not TOKEN:
+        logger.critical(
+            "Токен бота не найден! Убедитесь, что файл .env существует и содержит TOKEN."
+        )
+        return
+
     attempt = 0
     while attempt < MAX_RETRIES:
         try:
@@ -55,6 +61,13 @@ def main():
                 if attempt < MAX_RETRIES:
                     logger.info(f"Попытка {attempt + 1} через {RETRY_DELAY} секунд...")
                     time.sleep(RETRY_DELAY)
+
+        except ConnectionError as ce:
+            logger.error(f"Ошибка подключения: {ce}", exc_info=True)
+            attempt += 1
+            if attempt < MAX_RETRIES:
+                logger.info(f"Попытка {attempt + 1} через {RETRY_DELAY} секунд...")
+                time.sleep(RETRY_DELAY * 2)  # Увеличиваем задержку для сетевых ошибок
 
         except Exception as ex:
             logger.error(f"Критическая ошибка при запуске: {ex}", exc_info=True)
