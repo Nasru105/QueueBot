@@ -1,10 +1,11 @@
 import asyncio
-from typing import List, Optional
+import logging
+from typing import Optional
 
 from telegram import User
 
 from config import STUDENTS_USERNAMES
-from services.queue_logger import QueueLogger
+from services.logger import QueueLogger
 from utils.InlineKeyboards import queue_keyboard
 
 
@@ -13,7 +14,11 @@ async def safe_delete(context, chat, message_id):
     try:
         await context.bot.delete_message(chat_id=chat.id, message_id=message_id)
     except Exception as e:
-        QueueLogger.log(chat.title or chat.username, action=f"Не удалось удалить сообщение {message_id}: {e}")
+        QueueLogger.log(
+            chat.title or chat.username,
+            action=f"Не удалось удалить сообщение {message_id}: {e}",
+            level=logging.WARNING,
+        )
 
 
 def get_user_name(user: User):
@@ -29,7 +34,9 @@ async def delete_later(context, chat, message_id, time=5):
     await safe_delete(context, chat, message_id)
 
 
-def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str], list[str]]:
+def parse_queue_args(
+    args: list[str], queues: list[str]
+) -> tuple[Optional[str], list[str]]:
     """
     Парсит аргументы команды.
     Ищет совпадение имени очереди среди аргументов
@@ -59,9 +66,16 @@ async def update_existing_queues_info(bot, queue_manager, chat, queues):
                 await bot.edit_message_text(
                     chat_id=chat.id,
                     message_id=message_id,
-                    text=await queue_manager.get_queue_text(chat.id, current_queue_name),
+                    text=await queue_manager.get_queue_text(
+                        chat.id, current_queue_name
+                    ),
                     parse_mode="MarkdownV2",
                     reply_markup=queue_keyboard(queue_index),
                 )
             except Exception as ex:
-                QueueLogger.log(chat.title or chat.username, current_queue_name,  action=f"Exception: {ex}")
+                QueueLogger.log(
+                    chat.title or chat.username,
+                    current_queue_name,
+                    str(ex),
+                    logging.ERROR,
+                )

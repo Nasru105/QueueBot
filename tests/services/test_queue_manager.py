@@ -1,8 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-import types
-from services.queue_manager import QueueManager
+from app.services.queue_manager import QueueManager
 
 
 class FakeChat:

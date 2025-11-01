@@ -5,6 +5,7 @@ from utils.InlineKeyboards import queues_keyboard
 from utils.utils import safe_delete, delete_later
 from services.queue_manager import queue_manager
 
+
 async def start_help(update, context):
     chat = update.effective_chat
     message_id = update.message.message_id
@@ -24,9 +25,7 @@ async def start_help(update, context):
     )
 
     await context.bot.send_message(
-        chat_id=chat.id,
-        text=text,
-        message_thread_id=message_thread_id
+        chat_id=chat.id, text=text, message_thread_id=message_thread_id
     )
 
 
@@ -61,7 +60,9 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     chat: Chat = update.effective_chat
     message_id: int = update.message.message_id
-    message_thread_id: int | None = update.message.message_thread_id if update.message else None
+    message_thread_id: int | None = (
+        update.message.message_thread_id if update.message else None
+    )
 
     # Удаляем команду пользователя
     await safe_delete(context, chat, message_id)
@@ -80,7 +81,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id=chat.id,
             text="Выберите очередь:",
             reply_markup=await queues_keyboard(list(queues_list)),
-            message_thread_id=message_thread_id
+            message_thread_id=message_thread_id,
         )
         # Сохраняем ID нового меню
         await queue_manager.set_last_queues_message_id(chat.id, sent.message_id)
@@ -89,7 +90,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         sent = await context.bot.send_message(
             chat_id=chat.id,
             text="Нет активных очередей",
-            message_thread_id=message_thread_id
+            message_thread_id=message_thread_id,
         )
         await queue_manager.set_last_queues_message_id(chat.id, None)
 

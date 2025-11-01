@@ -1,9 +1,17 @@
-from telegram.ext import CommandHandler, CallbackQueryHandler
-
-from commands.admin import delete_queue, delete_queues, insert_user, remove_user, replace_users, generate_queue, \
-    get_list_of_students, admin_help, rename_queue
+from commands.admin import (
+    admin_help,
+    delete_queue,
+    delete_queues,
+    generate_queue,
+    get_list_of_students,
+    insert_user,
+    remove_user,
+    rename_queue,
+    replace_users,
+)
 from commands.queue import create, queues, start_help
-from handlers.handlers import handle_queue_button, error_handler, handle_queues_button
+from handlers.handlers import error_handler, handle_queue_button, handle_queues_button
+from telegram.ext import CallbackQueryHandler, CommandHandler
 
 
 def register_handlers(app):
@@ -30,7 +38,9 @@ def register_handlers(app):
 
 
 async def set_commands(app):
-    await app.bot.set_my_commands([
-        ("create", "Создать очередь"),
-        ("queues", "Показать список очередей"),
-    ])
+    await app.bot.set_my_commands(
+        [
+            ("create", "Создать очередь"),
+            ("queues", "Показать список очередей"),
+        ]
+    )

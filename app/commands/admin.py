@@ -5,18 +5,20 @@ from telegram.ext import ContextTypes
 from functools import wraps
 
 from config import STUDENTS_USERNAMES
-from services.queue_logger import QueueLogger
+from services.logger import QueueLogger
 from services.queue_manager import queue_manager
 from utils.utils import safe_delete, parse_queue_args, update_existing_queues_info
 
 
 def admins_only(func):
     @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+    async def wrapper(
+        update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs
+    ):
         user_id = update.effective_user.id
         chat = update.effective_chat
         member = await context.bot.get_chat_member(chat.id, user_id)
-        if not chat.title or member.status in ('administrator', 'creator'):
+        if not chat.title or member.status in ("administrator", "creator"):
             return await func(update, context, *args, **kwargs)
         return None
 
@@ -45,9 +47,7 @@ async def admin_help(update, context):
     )
 
     await context.bot.send_message(
-        chat_id=chat.id,
-        text=text,
-        message_thread_id=message_thread_id
+        chat_id=chat.id, text=text, message_thread_id=message_thread_id
     )
 
 
@@ -91,7 +91,6 @@ async def delete_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     queues = await queue_manager.get_queues(chat.id)
     for queue_name in list(queues.keys()):
-
         last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
         if last_id:
             await safe_delete(context, chat, last_id)
@@ -133,10 +132,14 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_name in queue:
             remove_position = queue.index(user_name)
             queue.remove(user_name)
-            QueueLogger.removed(chat.title or chat.username, queue_name, user_name, remove_position + 1)
+            QueueLogger.removed(
+                chat.title or chat.username, queue_name, user_name, remove_position + 1
+            )
 
         queue.insert(position, user_name)
-        QueueLogger.inserted(chat.title or chat.username, queue_name, user_name, position + 1)
+        QueueLogger.inserted(
+            chat.title or chat.username, queue_name, user_name, position + 1
+        )
 
     await queue_manager.send_queue_message(update, context, queue_name)
 
@@ -179,7 +182,9 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             removed_name = user_name
 
     if removed_name:
-        QueueLogger.removed(chat.title or chat.username, queue_name, removed_name, position + 1)
+        QueueLogger.removed(
+            chat.title or chat.username, queue_name, removed_name, position + 1
+        )
         await queue_manager.send_queue_message(update, context, queue_name)
 
 
@@ -204,9 +209,13 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     queue_length = len(queue)
-    if (pos1 == pos2 or
-            pos1 < 0 or pos2 < 0 or
-            pos1 >= queue_length or pos2 >= queue_length):
+    if (
+        pos1 == pos2
+        or pos1 < 0
+        or pos2 < 0
+        or pos1 >= queue_length
+        or pos2 >= queue_length
+    ):
         return
 
     # Меняем местами
@@ -214,13 +223,22 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name2 = queue[pos2]
     queue[pos1], queue[pos2] = user_name2, user_name1
 
-    QueueLogger.replaced(chat.title or chat.username, queue_name, user_name1, pos1 + 1, user_name2, pos2 + 1)
+    QueueLogger.replaced(
+        chat.title or chat.username,
+        queue_name,
+        user_name1,
+        pos1 + 1,
+        user_name2,
+        pos2 + 1,
+    )
 
     await queue_manager.send_queue_message(update, context, queue_name)
 
 
 @admins_only
-async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE, shuffle: bool = False):
+async def get_list_of_students(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, shuffle: bool = False
+):
     chat = update.effective_chat
     await safe_delete(context, chat, update.message.message_id)
 
