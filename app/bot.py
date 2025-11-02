@@ -23,7 +23,7 @@ load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 MAX_RETRIES = 3
-RETRY_DELAY = 15  # секунд между попытками
+RETRY_DELAY = 5  # секунд между попытками
 
 
 def main():

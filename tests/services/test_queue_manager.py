@@ -152,11 +152,11 @@ async def test_send_queue_message_creates_message(qm, mocker):
 @pytest.mark.asyncio
 async def test_send_queue_message_deletes_previous(qm, mocker):
     chat = FakeChat()
-    mocker.patch("services.queue_manager.save_data")
+    mocker.patch("app.services.queue_manager.save_data")
     fake_delete = mocker.patch(
-        "services.queue_manager.safe_delete", new_callable=AsyncMock
+        "app.services.queue_manager.safe_delete", new_callable=AsyncMock
     )
-    mocker.patch("services.queue_manager.queue_keyboard", return_value="keyboard")
+    mocker.patch("app.services.queue_manager.queue_keyboard", return_value="keyboard")
 
     # создаём очередь и сохраняем старый message_id
     await qm.create_queue(chat, "Очередь 1")

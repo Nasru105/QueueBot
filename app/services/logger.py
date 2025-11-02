@@ -4,7 +4,6 @@ import sys
 import time
 from typing import Optional
 
-
 # Устанавливаем часовой пояс Москва
 if os.name != "nt":  # не для Windows
     os.environ["TZ"] = "Europe/Moscow"
@@ -12,10 +11,22 @@ if os.name != "nt":  # не для Windows
 
 logger = logging.getLogger("QueueLogger")
 logger.setLevel(logging.INFO)
-# Формат логов
-formatter = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)s | %(message)s", datefmt="%d.%m.%Y %H:%M:%S"
+
+
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        if not hasattr(record, "chat_title"):
+            record.chat_title = "-"
+        if not hasattr(record, "queue"):
+            record.queue = "-"
+        return super().format(record)
+
+
+formatter = SafeFormatter(
+    fmt="%(asctime)s | %(levelname)s | %(chat_title)s | %(queue)s | %(message)s",
+    datefmt="%d.%m.%Y %H:%M:%S",
 )
+
 
 # Обработчик для консоли (для Docker/Promtail)
 console_handler = logging.StreamHandler(sys.stdout)  # Явно указываем stdout
@@ -42,15 +53,14 @@ class QueueLogger:
         action: str = "action",
         level: int = logging.INFO,
     ) -> None:
-        """
-        Логирует действие с очередью на указанном уровне.
-
-        :param chat_title: Название чата или username
-        :param queue_name: Имя очереди
-        :param action: Текст действия
-        :param level: Уровень логирования (logging.DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        """
-        logger.log(level, f"{chat_title} | {queue_name}: {action}")
+        logger.log(
+            level,
+            action,
+            extra={
+                "chat_title": chat_title,
+                "queue": queue_name,
+            },
+        )
 
     @classmethod
     def joined(
