@@ -33,3 +33,32 @@ def save_data(data):
         os.replace(temp_file, FILE)
     except Exception as e:
         logger.error(f"Ошибка при сохранении данных: {e}")
+
+
+def load_users_names(file="users_names.json"):
+    try:
+        file = os.path.join(DATA_DIR, file)
+        if not os.path.exists(file):
+            return {}
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        logger.error(f"Ошибка при чтении JSON файла: {e}")
+        return {}
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке данных: {e}")
+        return {}
+
+
+def save_users_names(data, file="users_names.json"):
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        file = os.path.join(DATA_DIR, file)
+        # Сначала пишем во временный файл
+        temp_file = file + ".tmp"
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        # Затем безопасно заменяем основной файл
+        os.replace(temp_file, file)
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении данных: {e}")

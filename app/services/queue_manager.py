@@ -19,9 +19,7 @@ class QueueManager:
         # есть структура с ключом "queues" и "last_queues_message_id"
         self.data = {
             int(chat): {
-                "queues": {
-                    str(q): val for q, val in chat_data.get("queues", {}).items()
-                },
+                "queues": {str(q): val for q, val in chat_data.get("queues", {}).items()},
                 "last_queues_message_id": chat_data.get("last_queues_message_id"),
             }
             for chat, chat_data in self.data.items()
@@ -59,9 +57,7 @@ class QueueManager:
         try:
             # Если передан CallbackQuery или объект, у которого есть edit_message_text
             if hasattr(query_or_update, "edit_message_text"):
-                await query_or_update.edit_message_text(
-                    text=text, parse_mode="MarkdownV2", reply_markup=keyboard
-                )
+                await query_or_update.edit_message_text(text=text, parse_mode="MarkdownV2", reply_markup=keyboard)
                 message_id = query_or_update.message.message_id
 
             # Если передан Update или другой объект с message == None, попробуем
@@ -83,9 +79,7 @@ class QueueManager:
 
         except Exception as ex:
             # Логируем ошибку редактирования и отправляем новое сообщение (если есть context)
-            QueueLogger.log(
-                chat.title or chat.username, queue_name, str(ex), level=logging.ERROR
-            )
+            QueueLogger.log(chat.title or chat.username, queue_name, str(ex), level=logging.ERROR)
             if context is not None:
                 sent = await context.bot.send_message(
                     chat_id=chat.id,
@@ -93,9 +87,7 @@ class QueueManager:
                     parse_mode="MarkdownV2",
                     reply_markup=keyboard,
                 )
-                await self.set_last_queue_message_id(
-                    chat.id, queue_name, sent.message_id
-                )
+                await self.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
             else:
                 # Если контекста нет, попробуем ответить через переданный объект (если есть message)
                 try:
@@ -103,9 +95,7 @@ class QueueManager:
                         sent = await query_or_update.message.reply_text(
                             text=text, reply_markup=keyboard, parse_mode="MarkdownV2"
                         )
-                        await self.set_last_queue_message_id(
-                            chat.id, queue_name, sent.message_id
-                        )
+                        await self.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
                 except Exception:
                     # Ничего не можем сделать без context
                     return
@@ -143,9 +133,7 @@ class QueueManager:
             QueueLogger.log(chat.title or chat.username, queue_name, "delete queue")
 
         else:
-            QueueLogger.log(
-                chat.title or chat.username, queue_name, "queue not found in chat"
-            )
+            QueueLogger.log(chat.title or chat.username, queue_name, "queue not found in chat")
 
     async def add_to_queue(self, chat, queue_name, user_name):
         """Добавляет пользователя в очередь"""
@@ -163,9 +151,7 @@ class QueueManager:
             queue.append(user_name)
             await self.save()
             position = len(queue)
-            QueueLogger.joined(
-                chat.title or chat.username, queue_name, user_name, position
-            )
+            QueueLogger.joined(chat.title or chat.username, queue_name, user_name, position)
 
     async def remove_from_queue(self, chat, queue_name: str, user_name: str):
         """Удаляет пользователя из очереди"""
@@ -175,18 +161,11 @@ class QueueManager:
                 position = queue.index(user_name)  # Запоминаем позицию перед удалением
                 queue.remove(user_name)
                 await self.save()
-                QueueLogger.leaved(
-                    chat.title or chat.username, queue_name, user_name, position + 1
-                )
+                QueueLogger.leaved(chat.title or chat.username, queue_name, user_name, position + 1)
 
     async def get_queue(self, chat_id: int, queue_name: str):
         """Возвращает список пользователей в очереди"""
-        return (
-            self.data.get(chat_id, {})
-            .get("queues", {})
-            .get(queue_name, {})
-            .get("queue", [])
-        )
+        return self.data.get(chat_id, {}).get("queues", {}).get(queue_name, {}).get("queue", [])
 
     async def get_last_queue_message_id(
         self,
@@ -194,16 +173,9 @@ class QueueManager:
         queue_name: str,
     ):
         """Возвращает ID последнего сообщения с очередью"""
-        return (
-            self.data.get(chat_id, {})
-            .get("queues", {})
-            .get(queue_name, {})
-            .get("last_queue_message_id")
-        )
+        return self.data.get(chat_id, {}).get("queues", {}).get(queue_name, {}).get("last_queue_message_id")
 
-    async def set_last_queue_message_id(
-        self, chat_id: int, queue_name: str, msg_id: int
-    ):
+    async def set_last_queue_message_id(self, chat_id: int, queue_name: str, msg_id: int):
         """Сохраняет ID последнего сообщения с очередью"""
         if chat_id not in self.data:
             self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
@@ -236,9 +208,7 @@ class QueueManager:
             queue_name = f"Очередь {count_queue}"
         return queue_name
 
-    async def send_queue_message(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE, queue_name
-    ):
+    async def send_queue_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, queue_name):
         """Отправляет или обновляет сообщение с очередью"""
         chat = update.effective_chat
         message_thread_id = update.message.message_thread_id if update.message else None
@@ -309,9 +279,7 @@ class QueueManager:
         else:
             # Если не существует — просто создаём пустую с новым именем
             queues[new_queue_name] = {"queue": [], "last_queue_message_id": None}
-            QueueLogger.log(
-                chat.title or chat.username, new_queue_name, "create (rename fallback)"
-            )
+            QueueLogger.log(chat.title or chat.username, new_queue_name, "create (rename fallback)")
 
         await self.save()
 

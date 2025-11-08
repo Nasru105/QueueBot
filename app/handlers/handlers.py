@@ -4,6 +4,8 @@ from asyncio import Lock
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from app.services.storage import load_users_names, save_users_names
+
 from ..services.logger import QueueLogger
 from ..services.queue_manager import queue_manager
 from ..utils.InlineKeyboards import queue_keyboard, queues_keyboard
@@ -23,7 +25,6 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = query.from_user
     user_name = get_user_name(user)
     chat = query.message.chat
-    # message_thread_id = query.message.message_thread_id
 
     _, queue_index, action = query.data.split("|")
     queues = await queue_manager.get_queues(chat.id)
@@ -45,16 +46,25 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
+    try:
+        users_names = load_users_names()
+        if user.id not in users_names:
+            users_names[str(user.id)] = user_name
+            save_users_names(users_names)
+    except Exception as ex:
+        QueueLogger.log(
+            chat.title or chat.username,
+            queue_name=queue_name,
+            action=f"{ex}",
+            level=logging.ERROR,
+        )
+
     # Используем лок для атомарности операций с очередью
     async with queues_lock:
         # Логика присоединения/выхода пользователя из очереди
-        if action == "join" and user_name not in await queue_manager.get_queue(
-            chat.id, queue_name
-        ):
+        if action == "join" and user_name not in await queue_manager.get_queue(chat.id, queue_name):
             await queue_manager.add_to_queue(chat, queue_name, user_name)
-        elif action == "leave" and user_name in await queue_manager.get_queue(
-            chat.id, queue_name
-        ):
+        elif action == "leave" and user_name in await queue_manager.get_queue(chat.id, queue_name):
             await queue_manager.remove_from_queue(chat, queue_name, user_name)
         else:
             return  # Игнорируем, если действие не применимо
@@ -120,9 +130,7 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
             message_thread_id=message_thread_id,
         )
 
-        await queue_manager.set_last_queue_message_id(
-            chat.id, queue_name, sent.message_id
-        )
+        await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
 
     elif action == "delete" and queue_index == "all":
         member = await context.bot.get_chat_member(chat.id, user_id)
@@ -137,9 +145,7 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
             queues = await queue_manager.get_queues(chat.id)
             for queue_name in list(queues.keys()):
-                last_id = await queue_manager.get_last_queue_message_id(
-                    chat.id, queue_name
-                )
+                last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
                 if last_id:
                     await safe_delete(context, chat, last_id)
 

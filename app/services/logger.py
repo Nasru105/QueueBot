@@ -53,37 +53,22 @@ class QueueLogger:
         action: str = "action",
         level: int = logging.INFO,
     ) -> None:
-        logger.log(
-            level,
-            action,
-            extra={
-                "chat_title": chat_title,
-                "queue": queue_name,
-            },
-        )
+        logger.log(level, action, extra={"chat_title": chat_title, "queue": queue_name})
 
     @classmethod
-    def joined(
-        cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int
-    ) -> None:
+    def joined(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
         cls.log(chat_title, queue_name, f"join {user_name} ({position})")
 
     @classmethod
-    def leaved(
-        cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int
-    ) -> None:
+    def leaved(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
         cls.log(chat_title, queue_name, f"leave {user_name} ({position})")
 
     @classmethod
-    def inserted(
-        cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int
-    ) -> None:
+    def inserted(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
         cls.log(chat_title, queue_name, f"insert {user_name} ({position})")
 
     @classmethod
-    def removed(
-        cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int
-    ) -> None:
+    def removed(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
         cls.log(chat_title, queue_name, f"remove {user_name} ({position})")
 
     @classmethod
