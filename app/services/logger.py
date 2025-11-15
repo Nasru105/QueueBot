@@ -4,6 +4,8 @@ import sys
 import time
 from typing import Optional
 
+from pythonjsonlogger import jsonlogger
+
 # Устанавливаем часовой пояс Москва
 if os.name != "nt":  # не для Windows
     os.environ["TZ"] = "Europe/Moscow"
@@ -13,21 +15,18 @@ logger = logging.getLogger("QueueLogger")
 logger.setLevel(logging.INFO)
 
 
-class SafeFormatter(logging.Formatter):
-    def format(self, record):
-        if not hasattr(record, "chat_title"):
-            record.chat_title = "-"
-        if not hasattr(record, "queue"):
-            record.queue = "-"
-        return super().format(record)
+class SafeFormatter(jsonlogger.JsonFormatter):
+    def add_fields(self, log_record, record, message_dict):
+        super().add_fields(log_record, record, message_dict)
+        log_record.setdefault("chat_title", getattr(record, "chat_title", "-"))
+        log_record.setdefault("queue", getattr(record, "queue", "-"))
 
 
 formatter = SafeFormatter(
     fmt="%(asctime)s | %(levelname)s | %(chat_title)s | %(queue)s | %(message)s",
     datefmt="%d.%m.%Y %H:%M:%S",
+    json_ensure_ascii=False,
 )
-
-
 # Обработчик для консоли (для Docker/Promtail)
 console_handler = logging.StreamHandler(sys.stdout)  # Явно указываем stdout
 console_handler.setFormatter(formatter)

@@ -24,7 +24,7 @@ class DummyQuery:
 @pytest.mark.asyncio
 async def test_handle_queue_button_join(monkeypatch):
     chat = SimpleNamespace(id=1, title="TestChat")
-    user = SimpleNamespace(username="nouser", first_name="Ivan", last_name=None)
+    user = SimpleNamespace(id=123, username="nouser", first_name="Ivan", last_name=None)
 
     # Fake queue manager
     fake_qm = SimpleNamespace()
@@ -43,15 +43,13 @@ async def test_handle_queue_button_join(monkeypatch):
     await handle_queue_button(update, context)
 
     fake_qm.add_to_queue.assert_awaited_once()
-    fake_qm.update_queue_message.assert_awaited_once_with(
-        chat, query, "Очередь 1", context
-    )
+    fake_qm.update_queue_message.assert_awaited_once_with(chat, query, "Очередь 1", context)
 
 
 @pytest.mark.asyncio
 async def test_handle_queue_button_leave(monkeypatch):
     chat = SimpleNamespace(id=1, title="TestChat")
-    user = SimpleNamespace(username="nouser", first_name="Ivan", last_name=None)
+    user = SimpleNamespace(id=123, username="nouser", first_name="Ivan", last_name=None)
 
     fake_qm = SimpleNamespace()
     fake_qm.get_queues = AsyncMock(return_value={"Очередь 1": {}})
@@ -69,9 +67,7 @@ async def test_handle_queue_button_leave(monkeypatch):
     await handle_queue_button(update, context)
 
     fake_qm.remove_from_queue.assert_awaited_once()
-    fake_qm.update_queue_message.assert_awaited_once_with(
-        chat, query, "Очередь 1", context
-    )
+    fake_qm.update_queue_message.assert_awaited_once_with(chat, query, "Очередь 1", context)
 
 
 @pytest.mark.asyncio
@@ -88,18 +84,14 @@ async def test_handle_queues_button_get(monkeypatch):
     monkeypatch.setattr("app.handlers.handlers.queue_manager", fake_qm)
 
     # monkeypatch update_existing_queues_info to avoid side-effects
-    monkeypatch.setattr(
-        "app.handlers.handlers.update_existing_queues_info", AsyncMock()
-    )
+    monkeypatch.setattr("app.handlers.handlers.update_existing_queues_info", AsyncMock())
 
     # prepare context bot
     fake_message = MagicMock()
     fake_message.message_id = 123
     context = MagicMock()
     context.bot.send_message = AsyncMock(return_value=fake_message)
-    context.bot.get_chat_member = AsyncMock(
-        return_value=SimpleNamespace(status="creator")
-    )
+    context.bot.get_chat_member = AsyncMock(return_value=SimpleNamespace(status="creator"))
 
     query = DummyQuery("queues|0|get", chat, SimpleNamespace(id=2))
     update = SimpleNamespace(callback_query=query)
@@ -107,6 +99,4 @@ async def test_handle_queues_button_get(monkeypatch):
     await handle_queues_button(update, context)
 
     context.bot.send_message.assert_awaited_once()
-    fake_qm.set_last_queue_message_id.assert_awaited_once_with(
-        chat.id, "Очередь 1", 123
-    )
+    fake_qm.set_last_queue_message_id.assert_awaited_once_with(chat.id, "Очередь 1", 123)

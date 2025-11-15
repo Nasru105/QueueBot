@@ -28,5 +28,5 @@ def test_get_user_name_from_students():
 
 
 def test_get_user_name_fallback():
-    user = SimpleNamespace(username="no_such", first_name="Ivan", last_name="Petrov")
+    user = SimpleNamespace(id=123, username="no_such", first_name="Ivan", last_name="Petrov")
     assert get_user_name(user) == "Ivan Petrov"
