@@ -19,6 +19,7 @@ class QueueManager:
         # есть структура с ключом "queues" и "last_queues_message_id"
         self.data = {
             int(chat): {
+                "title": chat_data.get("title"),
                 "queues": {str(q): val for q, val in chat_data.get("queues", {}).items()},
                 "last_queues_message_id": chat_data.get("last_queues_message_id"),
             }
@@ -108,7 +109,7 @@ class QueueManager:
         """Создаёт новую очередь с указанным названием"""
         # Инициализация структуры для чата, если её ещё нет
         if chat.id not in self.data:
-            self.data[chat.id] = {"queues": {}, "last_queues_message_id": None}
+            self.data[chat.id] = {"title": chat.title or chat.username, "queues": {}, "last_queues_message_id": None}
 
         # Добавляем очередь, если её ещё нет
         if queue_name not in self.data[chat.id]["queues"]:
@@ -138,7 +139,7 @@ class QueueManager:
     async def add_to_queue(self, chat, queue_name, user_name):
         """Добавляет пользователя в очередь"""
         if chat.id not in self.data:
-            self.data[chat.id] = {"queues": {}, "last_queues_message_id": None}
+            self.data[chat.id] = {"title": chat.title or chat.username, "queues": {}, "last_queues_message_id": None}
 
         if queue_name not in self.data[chat.id]["queues"]:
             self.data[chat.id]["queues"][queue_name] = {
@@ -178,7 +179,7 @@ class QueueManager:
     async def set_last_queue_message_id(self, chat_id: int, queue_name: str, msg_id: int):
         """Сохраняет ID последнего сообщения с очередью"""
         if chat_id not in self.data:
-            self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
+            self.data[chat_id] = {"title": None, "queues": {}, "last_queues_message_id": None}
         if queue_name not in self.data[chat_id]["queues"]:
             self.data[chat_id]["queues"][queue_name] = {
                 "queue": [],
@@ -242,7 +243,7 @@ class QueueManager:
     async def get_queues(self, chat_id):
         """Возвращает все очереди чата"""
         if chat_id not in self.data:
-            self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
+            self.data[chat_id] = {"title": None, "queues": {}, "last_queues_message_id": None}
         return self.data[chat_id]["queues"]
 
     async def get_last_queues_message_id(self, chat_id: int) -> int | None:
@@ -252,12 +253,15 @@ class QueueManager:
     async def set_last_queues_message_id(self, chat_id: int, msg_id: int):
         """Сохраняет ID последнего сообщения со списком всех очередей"""
         if chat_id not in self.data:
-            self.data[chat_id] = {"queues": {}, "last_queues_message_id": None}
+            self.data[chat_id] = {"title": None, "queues": {}, "last_queues_message_id": None}
         self.data[chat_id]["last_queues_message_id"] = msg_id
         await self.save()
 
     async def delete_last_queues_message_id(self, chat_id: int, msg_id: int):
         """Удалаяет ID последнего сообщения со списком всех очередей"""
+        # Ensure chat exists
+        if chat_id not in self.data:
+            self.data[chat_id] = {"title": None, "queues": {}, "last_queues_message_id": None}
         self.data[chat_id]["last_queues_message_id"] = None
         await self.save()
 
