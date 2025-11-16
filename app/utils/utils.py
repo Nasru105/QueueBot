@@ -1,15 +1,11 @@
 import asyncio
 import logging
-from typing import Optional
+from typing import List, Optional, Tuple
 
+from config import STUDENTS_USERNAMES
+from services.logger import QueueLogger
+from services.storage import load_users_names
 from telegram import User
-from telegram.error import BadRequest
-
-from app.services.storage import load_users_names
-
-from ..config import STUDENTS_USERNAMES
-from ..services.logger import QueueLogger
-from .InlineKeyboards import queue_keyboard
 
 
 # Безопасное удаление сообщения.
@@ -40,52 +36,43 @@ async def delete_later(context, chat, message_id, time=5):
     await safe_delete(context, chat, message_id)
 
 
+# app/queues_service/__init__.py или utils
 def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str], list[str]]:
     """
     Парсит аргументы команды.
-    Ищет совпадение имени очереди среди аргументов
-    и возвращает (queue_name, остальные аргументы).
-
-    :param args: Список аргументов команды
-    :param queues: список существующих очередей
-    :return: (queue_name, other_args) или (None, [])
+    Ищет САМОЕ ДЛИННОЕ совпадение имени очереди.
     """
+    if not args:
+        return None, []
+
+    best_match = None
+    best_i = 0
+
     for i in range(1, len(args) + 1):
         candidate = " ".join(args[:i])
         if candidate in queues:
-            return candidate, args[i:]
+            best_match = candidate
+            best_i = i
+
+    if best_match:
+        return best_match, args[best_i:]
     return None, []
 
 
-async def update_existing_queues_info(bot, queue_manager, chat, queues):
+def parse_users_names(args: List[str], queue: List[str]) -> Tuple[Optional[str], Optional[str]]:
     """
-    Обновление сообщений с очередями
+    Ищет два имени в очереди из аргументов.
+    Возвращает (имя1, имя2) или (None, None)
     """
-    for queue_index, (current_queue_name, queue_data) in enumerate(queues.items()):
-        message_id = queue_data.get("last_queue_message_id")
+    if len(args) < 2:
+        return None, None
 
-        if message_id:
-            try:
-                # Правильный способ получения сообщения по ID в python-telegram-bot
-                await bot.edit_message_text(
-                    chat_id=chat.id,
-                    message_id=message_id,
-                    text=await queue_manager.get_queue_text(chat.id, current_queue_name),
-                    parse_mode="MarkdownV2",
-                    reply_markup=queue_keyboard(queue_index),
-                )
-            except BadRequest as e:
-                if "Message is not modified" in e.message:
-                    pass  # можно игнорировать
-                else:
-                    raise
-            except Exception as ex:
-                error_type = type(ex).__name__
-                error_message = str(ex)
+    # Пробуем найти два разных имени
+    for i in range(len(args) - 1):
+        name1 = " ".join(args[: i + 1])
+        name2 = " ".join(args[i + 1 :])
 
-                QueueLogger.log(
-                    chat.title or chat.username,
-                    current_queue_name,
-                    f"{error_type}: {error_message}",
-                    logging.ERROR,
-                )
+        if name1 in queue and name2 in queue and name1 != name2:
+            return name1, name2
+
+    return None, None
