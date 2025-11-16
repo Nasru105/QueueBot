@@ -1,7 +1,9 @@
+import json
 import logging
 import os
 import sys
 import time
+from collections import OrderedDict
 from typing import Optional
 
 from pythonjsonlogger import jsonlogger
@@ -21,16 +23,56 @@ class SafeFormatter(jsonlogger.JsonFormatter):
         log_record.setdefault("chat_title", getattr(record, "chat_title", "-"))
         log_record.setdefault("queue", getattr(record, "queue", "-"))
 
+    def process_log_record(self, log_record):
+        # стандартная обработка jsonlogger
+        log_record = super().process_log_record(log_record)
+
+        # собираем ключи в нужном порядке
+        ordered = OrderedDict()
+        ordered["asctime"] = log_record.pop("asctime", "")
+        ordered["level"] = log_record.pop("levelname", "").lower()
+        ordered["chat_title"] = log_record.pop("chat_title", "-")
+        ordered["queue"] = log_record.pop("queue", "-")
+        ordered["message"] = log_record.pop("message", "")
+
+        # остальные поля — в конце
+        for k, v in log_record.items():
+            ordered[k] = v
+
+        return ordered
+
+    def to_json(self, record_dict):
+        # ensure_ascii=False — важно для кириллицы
+        return json.dumps(record_dict, ensure_ascii=False)
+
 
 formatter = SafeFormatter(
     fmt="%(asctime)s | %(levelname)s | %(chat_title)s | %(queue)s | %(message)s",
     datefmt="%d.%m.%Y %H:%M:%S",
     json_ensure_ascii=False,
 )
-# Обработчик для консоли (для Docker/Promtail)
-console_handler = logging.StreamHandler(sys.stdout)  # Явно указываем stdout
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
+
+
+class ErrorFilter(logging.Filter):
+    def filter(self, record):
+        return record.levelno >= logging.ERROR
+
+
+class InfoFilter(logging.Filter):
+    def filter(self, record):
+        return record.levelno < logging.ERROR
+
+
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.addFilter(InfoFilter())
+stdout_handler.setFormatter(formatter)
+
+stderr_handler = logging.StreamHandler(sys.stderr)
+stderr_handler.addFilter(ErrorFilter())
+stderr_handler.setFormatter(formatter)
+
+logger.addHandler(stdout_handler)
+logger.addHandler(stderr_handler)
 
 os.makedirs("data/logs", exist_ok=True)
 file_handler = logging.FileHandler("data/logs/queue.log", encoding="utf-8")

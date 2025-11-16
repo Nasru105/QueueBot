@@ -52,12 +52,10 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             users_names[str(user.id)] = user_name
             save_users_names(users_names)
     except Exception as ex:
-        QueueLogger.log(
-            chat.title or chat.username,
-            queue_name=queue_name,
-            action=f"{ex}",
-            level=logging.ERROR,
-        )
+        error_type = type(ex).__name__
+        error_message = str(ex)
+
+        QueueLogger.log(chat.title or chat.username, queue_name, f"{error_type}: {error_message}", logging.ERROR)
 
     # Используем лок для атомарности операций с очередью
     async with queues_lock:

@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from telegram import User
+from telegram.error import BadRequest
 
 from app.services.storage import load_users_names
 
@@ -73,10 +74,18 @@ async def update_existing_queues_info(bot, queue_manager, chat, queues):
                     parse_mode="MarkdownV2",
                     reply_markup=queue_keyboard(queue_index),
                 )
+            except BadRequest as e:
+                if "Message is not modified" in e.message:
+                    pass  # можно игнорировать
+                else:
+                    raise
             except Exception as ex:
+                error_type = type(ex).__name__
+                error_message = str(ex)
+
                 QueueLogger.log(
                     chat.title or chat.username,
                     current_queue_name,
-                    str(ex),
+                    f"{error_type}: {error_message}",
                     logging.ERROR,
                 )
