@@ -99,9 +99,10 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_delete(context, chat, message_id)
 
     # Удаляем меню
-    last_queues_id = await queue_service.repo.get_list_message_id(chat.id)
-    if last_queues_id:
-        await safe_delete(context, chat, last_queues_id)
+    last_list_message_id = await queue_service.repo.get_list_message_id(chat.id)
+    if last_list_message_id:
+        await safe_delete(context, chat, last_list_message_id)
+        await queue_service.repo.clear_list_message_id(chat.id)
 
     queues = await queue_service.repo.get_all_queues(chat.id)
     for queue_name in list(queues.keys()):
@@ -109,8 +110,6 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if last_id:
             await safe_delete(context, chat, last_id)
         await queue_service.delete_queue(chat.id, queue_name, chat_title)
-
-    await queue_service.repo.clear_list_message_id(chat.id)
 
 
 @admins_only

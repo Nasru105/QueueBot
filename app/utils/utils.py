@@ -6,12 +6,16 @@ from config import STUDENTS_USERNAMES
 from services.logger import QueueLogger
 from services.storage import load_users_names
 from telegram import User
+from telegram.error import BadRequest
 
 
 # Безопасное удаление сообщения.
 async def safe_delete(context, chat, message_id):
     try:
         await context.bot.delete_message(chat_id=chat.id, message_id=message_id)
+    except BadRequest as BREx:
+        if BREx.message != "Message to delete not found":
+            raise
     except Exception as e:
         QueueLogger.log(
             chat.title or chat.username,

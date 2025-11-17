@@ -12,7 +12,7 @@ class QueueRepository:
     async def create_or_get_chat(self, chat_id: int, title: str = None) -> Dict:
         doc = await self.get_chat(chat_id)
         if not doc:
-            doc = {"chat_id": chat_id, "queues": []}
+            doc = {"chat_id": chat_id, "queues": [], "chat_title": title}
             await queue_collection.insert_one(doc)
         return doc
 
@@ -74,15 +74,11 @@ class QueueRepository:
         return position
 
     async def create_queue(self, chat_id: int, chat_title: int, queue_name: str):
-        doc = await self.get_chat(chat_id)
-        if not doc:
-            doc = {"chat_id": chat_id, "queues": []}
-            await queue_collection.insert_one(doc)
-        else:
-            # Check if queue already exists
-            for q in doc.get("queues", []):
-                if q.get("name") == queue_name:
-                    return  # Queue already exists
+        doc = await self.create_or_get_chat(chat_id, chat_title)
+        # Check if queue already exists
+        for q in doc.get("queues", []):
+            if q.get("name") == queue_name:
+                return  # Queue already exists
 
         # Add new queue to the array
         new_queue = {"name": queue_name, "queue": [], "last_queue_message_id": None}
@@ -90,22 +86,34 @@ class QueueRepository:
         await self.update_chat(chat_id, {"queues": doc["queues"]})
 
     async def delete_queue(self, chat_id: int, queue_name: str) -> bool:
-        doc = await self.get_chat(chat_id)
+        """
+        Удаляет очередь по имени.
+        Если это была последняя очередь — полностью удаляет документ чата.
+        """
+        # Получаем документ
+        doc = await queue_collection.find_one({"chat_id": chat_id})
         if not doc:
             return False
 
-        original_len = len(doc.get("queues", []))
-        doc["queues"] = [q for q in doc.get("queues", []) if q.get("name") != queue_name]
+        queues = doc.get("queues", [])
+        original_count = len(queues)
 
-        if len(doc["queues"]) < original_len:
-            # Queue was found and removed
-            if not doc["queues"]:
-                # No queues left, delete the chat document
-                await queue_collection.delete_one({"chat_id": chat_id})
-            else:
-                await self.update_chat(chat_id, {"queues": doc["queues"]})
-            return True
-        return False
+        # Фильтруем очереди
+        new_queues = [q for q in queues if q.get("name") != queue_name]
+
+        if len(new_queues) == original_count:
+            # Очередь не найдена
+            return False
+
+        # Очередь найдена и удалена
+        if len(new_queues) == 0:
+            # Это была последняя очередь → удаляем весь документ
+            result = await queue_collection.delete_one({"chat_id": chat_id})
+            return result.deleted_count > 0
+        else:
+            # Остались другие очереди → обновляем массив
+            result = await queue_collection.update_one({"chat_id": chat_id}, {"$set": {"queues": new_queues}})
+            return result.modified_count > 0
 
     async def update_queue(self, chat_id: int, queue_name: str, new_queue: List[str]):
         """
@@ -171,14 +179,14 @@ class QueueRepository:
         return queues_dict
 
     async def get_list_message_id(self, chat_id: int) -> Optional[int]:
-        doc = await queue_collection.find_one({"chat_id": chat_id}, {"last_queues_message_id": 1})
-        return doc.get("last_queues_message_id") if doc else None
+        doc = await queue_collection.find_one({"chat_id": chat_id}, {"last_list_message_id": 1})
+        return doc.get("last_list_message_id") if doc else None
 
     async def set_list_message_id(self, chat_id: int, msg_id: int):
-        await self.update_chat(chat_id, {"last_queues_message_id": msg_id})
+        await self.update_chat(chat_id, {"last_list_message_id": msg_id})
 
     async def clear_list_message_id(self, chat_id: int):
-        await self.update_chat(chat_id, {"last_queues_message_id": None})
+        await self.update_chat(chat_id, {"last_list_message_id": None})
 
     async def rename_queue(self, chat_id: int, old_name: str, new_name: str):
         doc = await self.get_chat(chat_id)

@@ -47,7 +47,7 @@ class QueueService:
         if not queue:
             text += "Очередь пуста\\."
         else:
-            text += "\n".join(f"{i + 1}\\. {u}" for i, u in enumerate(queue))
+            text += "\n".join(f"{i + 1}\\. {escape_markdown(u, version=2)}" for i, u in enumerate(queue))
         return text
 
     async def get_queue_index(self, chat_id: int, queue_name: str) -> int:
