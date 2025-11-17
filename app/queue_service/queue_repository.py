@@ -1,6 +1,8 @@
 from typing import Any, Dict, List, Optional
 
-from services.mongo_storage import queue_collection
+from services.mongo_storage import queue_collection, user_collection
+from telegram import User
+from utils.utils import strip_user_name
 
 
 class QueueRepository:
@@ -207,3 +209,19 @@ class QueueRepository:
             new_queue = {"name": new_name, "queue": [], "last_queue_message_id": None}
             doc["queues"].append(new_queue)
             await self.update_chat(chat_id, {"queues": doc["queues"]})
+
+    async def get_user_display_name(self, user: User) -> str:
+        doc_user = await user_collection.find_one({"user_id": user.id})
+        if not doc_user:
+            # Первый раз видим — создаём
+            doc_user = {
+                "user_id": user.id,
+                "username": user.username,
+                "display_names": {"global": await strip_user_name(user.last_name, user.first_name)},
+            }
+            await user_collection.insert_one(doc_user)
+
+        return doc_user
+
+    async def update_user_display_name(self, user_id: int, display_names: Dict[str, str]):
+        await user_collection.update_one({"user_id": user_id}, {"$set": {"display_names": display_names}}, upsert=True)

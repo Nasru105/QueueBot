@@ -16,7 +16,7 @@ from .admin import (
     rename_queue,
     replace_users,
 )
-from .queue import create, queues, start_help
+from .queue import create, nickname, nickname_global, queues, start_help
 
 
 def register_handlers(app):
@@ -25,6 +25,8 @@ def register_handlers(app):
 
     app.add_handler(CommandHandler("create", create))
     app.add_handler(CommandHandler("queues", queues))
+    app.add_handler(CommandHandler("nickname", nickname))
+    app.add_handler(CommandHandler("nickname_global", nickname_global))
 
     app.add_handler(CommandHandler("delete", delete_queue))
     app.add_handler(CommandHandler("delete_all", delete_all_queues))

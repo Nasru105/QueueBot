@@ -19,7 +19,9 @@ async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     text = (
         "/create [Имя очереди] — создает очередь\n"
-        "/queues — посмотреть активные очереди\n\n"
+        "/queues — посмотреть активные очереди\n"
+        "/nickname [nickname] — задает отображаемое имя в чате и имеет приоритет над глобальным (без парамеров для сброса)\n"
+        "/nickname_global [nickname] — задает отображаемое всех чатах (без парамеров для сброса)\n\n"
         "Команды для администраторов:\n"
         "/delete <Имя очереди> — удалить очередь\n"
         "/delete_all — удалить все очереди\n"
@@ -98,3 +100,53 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         await queue_service.repo.clear_list_message_id(chat.id)
         create_task(delete_later(context, chat, sent.message_id, 10))
+
+
+async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Устанавливает никнейм пользователя в очередях."""
+    chat: Chat = update.effective_chat
+    message_id: int = update.message.message_id
+    chat_title = chat.title or chat.username or "Личный чат"
+    message_thread_id = update.message.message_thread_id if update.message else None
+    user = update.effective_user
+
+    # Удаляем команду
+    await safe_delete(context, chat, message_id)
+
+    args = context.args
+
+    nickname = " ".join(args) if args else None
+    if nickname:
+        await queue_service.set_user_display_name(user, nickname, chat.id, chat_title)
+        response = f"Установлен никнейм для пользователя {user.username}: {nickname} для {chat_title}"
+    else:
+        await queue_service.clear_user_display_name(user, chat.id, chat_title)
+        response = f"Сброшен никнейм для {chat_title} на стандартный"
+
+    response_message = await context.bot.send_message(chat.id, response, message_thread_id=message_thread_id)
+    create_task(delete_later(context, chat, response_message.message_id))
+
+
+async def nickname_global(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Устанавливает никнейм пользователя в очередях."""
+    chat: Chat = update.effective_chat
+    message_id: int = update.message.message_id
+    chat_title = chat.title or chat.username or "Личный чат"
+    message_thread_id = update.message.message_thread_id if update.message else None
+    user = update.effective_user
+
+    # Удаляем команду
+    await safe_delete(context, chat, message_id)
+
+    args = context.args
+    nickname = " ".join(args) if args else None
+
+    if nickname:
+        await queue_service.set_user_display_name(user, nickname, chat_title=chat_title)
+        response = f"Установлен глобальный никнейм для пользователя {user.username}: {nickname}"
+    else:
+        await queue_service.clear_user_display_name(user, chat_title=chat_title)
+        response = "Сброшен глобальный никнейм на стандартный"
+
+    response_message = await context.bot.send_message(chat.id, response, message_thread_id=message_thread_id)
+    create_task(delete_later(context, chat, response_message.message_id))

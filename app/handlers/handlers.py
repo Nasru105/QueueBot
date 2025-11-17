@@ -8,7 +8,7 @@ from services.storage import load_users_names, save_users_names
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 from utils.InlineKeyboards import queues_keyboard
-from utils.utils import get_user_name, safe_delete
+from utils.utils import safe_delete
 
 # Локи на чат
 chat_locks: dict[int, Lock] = {}
@@ -40,9 +40,9 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     user = query.from_user
-    user_name = get_user_name(user)
     chat = query.message.chat
     chat_title = chat.title or chat.username or "Личный чат"
+    user_name = await queue_service.get_user_display_name(user, chat.id)
 
     # Безопасное получение данных из callback
     try:

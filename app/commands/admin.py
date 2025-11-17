@@ -41,15 +41,18 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_delete(context, chat, message_id)
 
     text = (
-        "/create <Имя очереди> — создает очередь\n"
-        "/queues — посмотреть активные очереди\n\n"
+        "/create [Имя очереди] — создает очередь\n"
+        "/queues — посмотреть активные очереди\n"
+        "/nickname [nickname] — задает отображаемое имя в чате и имеет приоритет над глобальным (без парамеров для сброса)\n"
+        "/nickname_global [nickname] — задает отображаемое всех чатах (без парамеров для сброса)\n\n"
         "Команды для администраторов:\n"
         "/delete <Имя очереди> — удалить очередь\n"
         "/delete_all — удалить все очереди\n"
-        "/insert <Имя очереди> <Имя пользователя> <Индекс> — вставить на позицию\n"
-        "/remove <Имя очереди> <Имя пользователя> или <Индекс> — удалить\n"
-        "/replace <Имя очереди> <Индекс1> <Индекс2> — поменять местами\n"
-        "/rename <Старое имя> <Новое имя> — переименовать очередь\n\n"
+        "/insert <Имя очереди> <Имя пользователя> [Позиция] — вставить пользователя на позицию\n"
+        "/remove <Имя очереди> <Имя пользователя или Позиция> — удалить из очереди\n"
+        "/replace <Имя очереди> <Позиция 1> <Позиция 2> — поменять местами\n"
+        "/replace <Имя очереди> <Имя пользователя 1> <Имя пользователя 2> — поменять местами\n"
+        "/rename <Старое имя очереди> <Новое имя очереди> — переименовать очередь\n\n"
         "/generate <Имя очереди> <A|B> — сгенерировать из списка (перемешать)\n"
         "/getlist <Имя очереди> <A|B> — просто добавить без перемешивания\n"
     )
@@ -358,7 +361,7 @@ async def generate_students_list(update: Update, context: ContextTypes.DEFAULT_T
 
     if added_count == 0:
         error_message = await context.bot.send_message("Нет пользователей для добавления.")
-        create_task(delete_later(context, chat, error_message.message_id))
+        create_task(delete_later(chat.id, context, chat, error_message.message_id))
 
         await queue_service.delete_queue(chat.id, queue_name, chat_title)
         return

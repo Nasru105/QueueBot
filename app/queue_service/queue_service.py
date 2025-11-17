@@ -3,12 +3,12 @@ import logging
 from typing import Optional
 
 from services.logger import QueueLogger  # если logger в services
-from telegram import Chat
+from telegram import Chat, User
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 from utils.InlineKeyboards import queue_keyboard
-from utils.utils import safe_delete
+from utils.utils import safe_delete, strip_user_name
 
 from .queue_repository import QueueRepository
 
@@ -129,6 +129,55 @@ class QueueService:
     async def get_count_queues(self, chat_id: int) -> int:
         queues = await self.repo.get_all_queues(chat_id)
         return len(queues)
+
+    async def get_user_display_name(self, user: User, chat_id: int) -> str:
+        doc_user = await self.repo.get_user_display_name(user)
+
+        # Приоритет: кастомное в чате → глобальное → first_name
+        chat_str = str(chat_id)
+        return (
+            doc_user["display_names"].get(chat_str)
+            or doc_user["display_names"].get("global")
+            or f"{user.get('last_name', '').strip()} {user.get('first_name', '').strip()}".strip()
+            or user.get("username", "Unknown User")
+        )
+
+    async def set_user_display_name(
+        self, user: User, display_name: str, chat_id: int | None = None, chat_title: str = "Unknown"
+    ):
+        user_doc = await self.repo.get_user_display_name(user)
+        chat_str = str(chat_id) if chat_id else "global"
+
+        if "display_names" not in user_doc:
+            user_doc["display_names"] = {}
+
+        user_doc["display_names"][chat_str] = (
+            display_name if display_name else await strip_user_name(user.last_name, user.first_name)
+        ) or None
+        await self.repo.update_user_display_name(user.id, user_doc["display_names"])
+
+        QueueLogger.log(
+            chat_title,
+            action=f"{user.id} ({user.username}) set custom display name {display_name} for {chat_title} chat",
+        )
+
+    async def clear_user_display_name(self, user: User, chat_id: int | None = None, chat_title: str = "Unknown"):
+        user_doc = await self.repo.get_user_display_name(user)
+        chat_str = str(chat_id) if chat_id else "global"
+
+        if "display_names" not in user_doc:
+            return
+
+        if chat_str == "global":
+            user_doc["display_names"][chat_str] = (await strip_user_name(user.last_name, user.first_name)) or None
+        else:
+            user_doc["display_names"].pop(chat_str, None)
+
+        await self.repo.update_user_display_name(user.id, user_doc["display_names"])
+
+        QueueLogger.log(
+            chat_title, action=f"{user.id} ({user.username}) removed custom display name for {chat_title} chat"
+        )
 
     async def update_existing_queues_info(self, bot, chat: Chat, chat_title: str):
         """

@@ -12,6 +12,7 @@ DB_NAME = "queue_bot"
 client = AsyncIOMotorClient(MONGO_URI)
 db = client[DB_NAME]
 queue_collection = db["queue_data"]
+user_collection = db["user_data"]
 
 
 async def ensure_indexes():
