@@ -114,13 +114,7 @@ class QueueLogger:
 
     @classmethod
     def replaced(
-        cls,
-        chat_title: Optional[str],
-        queue_name: str,
-        user_name1: str,
-        pos1: int,
-        user_name2: str,
-        pos2: int,
+        cls, chat_title: Optional[str], queue_name: str, user_name1: str, pos1: int, user_name2: str, pos2: int
     ) -> None:
         cls.log(
             chat_title,

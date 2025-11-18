@@ -2,8 +2,10 @@ import asyncio
 import logging
 from typing import List, Optional, Tuple
 
-from services.logger import QueueLogger
+from telegram import User
 from telegram.error import BadRequest
+
+from ..services.logger import QueueLogger
 
 
 # Безопасное удаление сообщения.
@@ -21,19 +23,16 @@ async def safe_delete(context, chat, message_id):
         )
 
 
-async def strip_user_name(last_name: str, first_name: str) -> str:
-    return f"{last_name.strip() or ''} {first_name.strip() or ''}".strip()
-
-
-# def get_user_name(user: User):
-#     users_names = load_users_names()
-#     if user.username in STUDENTS_USERNAMES:
-#         name = STUDENTS_USERNAMES[user.username][0]
-#     elif user.id in users_names:
-#         name = users_names[user.id]
-#     else:
-#         name = f"{user.first_name} {user.last_name or ''}".strip()
-#     return name
+def strip_user_full_name(user: User) -> str:
+    last_name = user.last_name.strip() if user.last_name else ""
+    first_name = user.first_name.strip() if user.first_name else ""
+    return (
+        f"{last_name} {first_name}".strip()
+        if last_name and first_name
+        else user.username
+        if user.username
+        else str(user.id)
+    )
 
 
 async def delete_later(context, chat, message_id, time=5):

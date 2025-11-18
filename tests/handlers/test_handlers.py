@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.handlers.handlers import handle_queue_button, handle_queues_button
+from app.handlers import handlers as handlers_mod
 
 
 class DummyMessage:
@@ -14,89 +14,92 @@ class DummyMessage:
 
 
 class DummyQuery:
-    def __init__(self, data, chat, from_user):
+    def __init__(self, data, chat, user):
         self.data = data
-        self.from_user = from_user
+        self.from_user = user
         self.message = DummyMessage(chat)
         self.answer = AsyncMock()
 
 
 @pytest.mark.asyncio
 async def test_handle_queue_button_join(monkeypatch):
-    chat = SimpleNamespace(id=1, title="TestChat")
-    user = SimpleNamespace(id=123, username="nouser", first_name="Ivan", last_name=None)
+    chat = SimpleNamespace(id=1, title="TestChat", username=None)
+    user = SimpleNamespace(id=5, username="tester")
 
-    # Fake queue manager
-    fake_qm = SimpleNamespace()
-    fake_qm.get_queues = AsyncMock(return_value={"Очередь 1": {}})
-    fake_qm.get_queue = AsyncMock(return_value=[])
-    fake_qm.add_to_queue = AsyncMock()
-    fake_qm.remove_from_queue = AsyncMock()
-    fake_qm.update_queue_message = AsyncMock()
-
-    monkeypatch.setattr("app.handlers.handlers.queue_manager", fake_qm)
+    repo = SimpleNamespace(
+        get_all_queues=AsyncMock(return_value={"Queue 1": {"queue": []}}),
+        get_queue=AsyncMock(return_value=[]),
+    )
+    queue_service = SimpleNamespace(
+        repo=repo,
+        get_user_display_name=AsyncMock(return_value="Tester"),
+        add_to_queue=AsyncMock(),
+        remove_from_queue=AsyncMock(),
+        update_queue_message=AsyncMock(),
+    )
+    monkeypatch.setattr(handlers_mod, "queue_service", queue_service)
 
     query = DummyQuery("queue|0|join", chat, user)
     update = SimpleNamespace(callback_query=query)
     context = MagicMock()
 
-    await handle_queue_button(update, context)
+    await handlers_mod.handle_queue_button(update, context)
 
-    fake_qm.add_to_queue.assert_awaited_once()
-    fake_qm.update_queue_message.assert_awaited_once_with(chat, query, "Очередь 1", context)
+    queue_service.get_user_display_name.assert_awaited_once()
+    queue_service.add_to_queue.assert_awaited_once_with(chat.id, "Queue 1", "Tester", "TestChat")
+    queue_service.update_queue_message.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_handle_queue_button_leave(monkeypatch):
-    chat = SimpleNamespace(id=1, title="TestChat")
-    user = SimpleNamespace(id=123, username="nouser", first_name="Ivan", last_name=None)
+    chat = SimpleNamespace(id=2, title="Chat", username=None)
+    user = SimpleNamespace(id=9, username="tester")
 
-    fake_qm = SimpleNamespace()
-    fake_qm.get_queues = AsyncMock(return_value={"Очередь 1": {}})
-    fake_qm.get_queue = AsyncMock(return_value=["Ivan"])
-    fake_qm.add_to_queue = AsyncMock()
-    fake_qm.remove_from_queue = AsyncMock()
-    fake_qm.update_queue_message = AsyncMock()
-
-    monkeypatch.setattr("app.handlers.handlers.queue_manager", fake_qm)
+    repo = SimpleNamespace(
+        get_all_queues=AsyncMock(return_value={"Queue X": {"queue": []}}),
+        get_queue=AsyncMock(return_value=["Tester"]),
+    )
+    queue_service = SimpleNamespace(
+        repo=repo,
+        get_user_display_name=AsyncMock(return_value="Tester"),
+        add_to_queue=AsyncMock(),
+        remove_from_queue=AsyncMock(),
+        update_queue_message=AsyncMock(),
+    )
+    monkeypatch.setattr(handlers_mod, "queue_service", queue_service)
 
     query = DummyQuery("queue|0|leave", chat, user)
     update = SimpleNamespace(callback_query=query)
     context = MagicMock()
 
-    await handle_queue_button(update, context)
+    await handlers_mod.handle_queue_button(update, context)
 
-    fake_qm.remove_from_queue.assert_awaited_once()
-    fake_qm.update_queue_message.assert_awaited_once_with(chat, query, "Очередь 1", context)
+    queue_service.remove_from_queue.assert_awaited_once_with(chat.id, "Queue X", "Tester", "Chat")
+    queue_service.update_queue_message.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_handle_queues_button_get(monkeypatch):
-    chat = SimpleNamespace(id=1, title="TestChat")
+    chat = SimpleNamespace(id=7, title="Chat", username=None)
+    user = SimpleNamespace(id=99)
 
-    fake_qm = SimpleNamespace()
-    fake_qm.get_last_queue_message_id = AsyncMock(return_value=None)
-    fake_qm.get_queues = AsyncMock(return_value={"Очередь 1": {}})
-    fake_qm.get_queue = AsyncMock(return_value=[])
-    fake_qm.get_queue_text = AsyncMock(return_value="текст очереди")
-    fake_qm.set_last_queue_message_id = AsyncMock()
+    repo = SimpleNamespace(
+        get_all_queues=AsyncMock(return_value={"Queue 1": {}, "Queue 2": {}}),
+        get_list_message_id=AsyncMock(return_value=None),
+        get_queue_message_id=AsyncMock(return_value=None),
+    )
+    queue_service = SimpleNamespace(
+        repo=repo,
+        send_queue_message=AsyncMock(),
+    )
+    monkeypatch.setattr(handlers_mod, "queue_service", queue_service)
 
-    monkeypatch.setattr("app.handlers.handlers.queue_manager", fake_qm)
-
-    # monkeypatch update_existing_queues_info to avoid side-effects
-    monkeypatch.setattr("app.handlers.handlers.update_existing_queues_info", AsyncMock())
-
-    # prepare context bot
-    fake_message = MagicMock()
-    fake_message.message_id = 123
-    context = MagicMock()
-    context.bot.send_message = AsyncMock(return_value=fake_message)
-    context.bot.get_chat_member = AsyncMock(return_value=SimpleNamespace(status="creator"))
-
-    query = DummyQuery("queues|0|get", chat, SimpleNamespace(id=2))
+    query = DummyQuery("queues|1|get", chat, user)
     update = SimpleNamespace(callback_query=query)
+    context = MagicMock()
 
-    await handle_queues_button(update, context)
+    await handlers_mod.handle_queues_button(update, context)
 
-    context.bot.send_message.assert_awaited_once()
-    fake_qm.set_last_queue_message_id.assert_awaited_once_with(chat.id, "Очередь 1", 123)
+    queue_service.send_queue_message.assert_awaited_once_with(
+        chat=chat, thread_id=None, context=context, queue_name="Queue 2"
+    )

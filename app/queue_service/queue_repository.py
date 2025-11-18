@@ -1,8 +1,9 @@
 from typing import Any, Dict, List, Optional
 
-from services.mongo_storage import queue_collection, user_collection
 from telegram import User
-from utils.utils import strip_user_name
+
+from ..services.mongo_storage import queue_collection, user_collection
+from ..utils.utils import strip_user_full_name
 
 
 class QueueRepository:
@@ -217,9 +218,11 @@ class QueueRepository:
             doc_user = {
                 "user_id": user.id,
                 "username": user.username,
-                "display_names": {"global": await strip_user_name(user.last_name, user.first_name)},
+                "display_names": {"global": strip_user_full_name(user)},
             }
             await user_collection.insert_one(doc_user)
+        elif doc_user.get("username", None) != user.username:
+            await user_collection.update_one({"user_id": user.id}, {"$set": {"username": user.username}}, upsert=True)
 
         return doc_user
 

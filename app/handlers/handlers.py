@@ -2,13 +2,13 @@
 import logging
 from asyncio import Lock
 
-from queue_service import queue_service  # ← Новый сервис
-from services.logger import QueueLogger
-from services.storage import load_users_names, save_users_names
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
-from utils.InlineKeyboards import queues_keyboard
-from utils.utils import safe_delete
+
+from ..queue_service import queue_service
+from ..services.logger import QueueLogger
+from ..utils.InlineKeyboards import queues_keyboard
+from ..utils.utils import safe_delete
 
 # Локи на чат
 chat_locks: dict[int, Lock] = {}
@@ -18,10 +18,6 @@ def get_chat_lock(chat_id: int) -> Lock:
     if chat_id not in chat_locks:
         chat_locks[chat_id] = Lock()
     return chat_locks[chat_id]
-
-
-# Кеш пользователей
-users_names_cache = load_users_names()
 
 
 async def is_user_admin(chat, user_id, context) -> bool:
@@ -58,11 +54,6 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     queue_name = list(queues.keys())[queue_index]
-
-    # Добавляем пользователя в кеш
-    if str(user.id) not in users_names_cache:
-        users_names_cache[str(user.id)] = user_name
-        save_users_names(users_names_cache)
 
     async with get_chat_lock(chat.id):
         current_queue = await queue_service.repo.get_queue(chat.id, queue_name)

@@ -1,180 +1,206 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from importlib import import_module
 
 import pytest
 
-from app.services.queue_manager import QueueManager
+from app.queue_service.queue_service import QueueService
+from telegram.error import BadRequest
+
+queue_service_module = import_module("app.queue_service.queue_service")
 
 
-class FakeChat:
-    """Фейковый чат для тестов"""
+@pytest.mark.asyncio
+async def test_get_queue_text_formats_entries(monkeypatch):
+    repo = SimpleNamespace(get_queue=AsyncMock(return_value=["Alice", "Bob"]))
+    service = QueueService(repo)
 
-    def __init__(self, chat_id=1, title="TestChat"):
-        self.id = chat_id
-        self.title = title
-        self.username = None
+    text = await service.get_queue_text(chat_id=1, queue_name="Очередь 1")
+
+    assert "*`Очередь 1`*" in text
+    assert "1\\. Alice" in text
+    assert "2\\. Bob" in text
+
+
+@pytest.mark.asyncio
+async def test_generate_queue_name_skips_existing():
+    repo = SimpleNamespace(
+        get_queue=AsyncMock(side_effect=[[1], [1], []]),
+    )
+    service = QueueService(repo)
+
+    name = await service.generate_queue_name(chat_id=1)
+
+    assert name == "Очередь 3"
+    assert repo.get_queue.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_get_user_display_name_priority(monkeypatch):
+    repo = SimpleNamespace(
+        get_user_display_name=AsyncMock(
+            return_value={
+                "display_names": {"global": "Global", "123": "Local"},
+            }
+        )
+    )
+    service = QueueService(repo)
+
+    user = {"id": 1, "username": "tester"}
+    name = await service.get_user_display_name(user, chat_id=123)
+    assert name == "Local"
+
+
+@pytest.mark.asyncio
+async def test_set_user_display_name_updates_repo(monkeypatch):
+    user_doc = {"display_names": {"global": "Global"}}
+    repo = SimpleNamespace(
+        get_user_display_name=AsyncMock(return_value=user_doc),
+        update_user_display_name=AsyncMock(),
+    )
+    service = QueueService(repo)
+
+    user = SimpleNamespace(id=7, username="tester", last_name="", first_name="Tester")
+
+    await service.set_user_display_name(user, "Chat Tester", chat_id=321, chat_title="Chat")
+
+    repo.update_user_display_name.assert_awaited_once_with(7, {"global": "Global", "321": "Chat Tester"})
 
 
 @pytest.fixture
-def qm():
-    """Создаём новый QueueManager без данных"""
-    with patch("app.services.queue_manager.load_data", return_value={}):
-        return QueueManager()
-
-
-@pytest.mark.asyncio
-async def test_create_and_get_queue(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    mocker.patch("app.services.queue_manager.QueueLogger.log")
-
-    await qm.create_queue(chat, "Очередь 1")
-
-    queues = await qm.get_queues(chat.id)
-    assert "Очередь 1" in queues
-    assert queues["Очередь 1"]["queue"] == []
-
-
-@pytest.mark.asyncio
-async def test_add_and_remove_user(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    mocker.patch("app.services.queue_manager.QueueLogger.joined")
-    mocker.patch("app.services.queue_manager.QueueLogger.leaved")
-
-    await qm.create_queue(chat, "Очередь 1")
-    await qm.add_to_queue(chat, "Очередь 1", "Иван")
-
-    queue = await qm.get_queue(chat.id, "Очередь 1")
-    assert queue == ["Иван"]
-
-    await qm.remove_from_queue(chat, "Очередь 1", "Иван")
-    queue = await qm.get_queue(chat.id, "Очередь 1")
-    assert queue == []
-
-
-@pytest.mark.asyncio
-async def test_delete_queue(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    mocker.patch("app.services.queue_manager.QueueLogger.log")
-
-    await qm.create_queue(chat, "Очередь 1")
-    assert "Очередь 1" in await qm.get_queues(chat.id)
-
-    await qm.delete_queue(chat, "Очередь 1")
-    queues = await qm.get_queues(chat.id)
-    assert "Очередь 1" not in queues
-
-
-@pytest.mark.asyncio
-async def test_rename_queue_existing(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    mocker.patch("app.services.queue_manager.QueueLogger.log")
-
-    await qm.create_queue(chat, "Очередь 1")
-    await qm.add_to_queue(chat, "Очередь 1", "Иван")
-
-    await qm.rename_queue(chat, "Очередь 1", "Очередь 2")
-
-    queues = await qm.get_queues(chat.id)
-    assert "Очередь 2" in queues
-    assert queues["Очередь 2"]["queue"] == ["Иван"]
-
-
-@pytest.mark.asyncio
-async def test_rename_queue_not_existing_creates_new(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    mocker.patch("app.services.queue_manager.QueueLogger.log")
-
-    await qm.rename_queue(chat, "Неизвестная", "Новая")
-
-    queues = await qm.get_queues(chat.id)
-    assert "Новая" in queues
-    assert queues["Новая"]["queue"] == []
-
-
-@pytest.mark.asyncio
-async def test_get_queue_text(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    await qm.create_queue(chat, "Очередь 1")
-
-    # Пустая очередь
-    text = await qm.get_queue_text(chat.id, "Очередь 1")
-    assert "Очередь пуста" in text
-
-    # С пользователями
-    await qm.add_to_queue(chat, "Очередь 1", "Иван")
-    await qm.add_to_queue(chat, "Очередь 1", "Петр")
-    text = await qm.get_queue_text(chat.id, "Очередь 1")
-    assert "1\\. Иван" in text
-    assert "2\\. Петр" in text
-
-
-@pytest.mark.asyncio
-async def test_send_queue_message_creates_message(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    mocker.patch("app.services.queue_manager.safe_delete", new_callable=AsyncMock)
-    mocker.patch("app.services.queue_manager.queue_keyboard", return_value="keyboard")
-
-    # создаём очередь с пользователями
-    await qm.create_queue(chat, "Очередь 1")
-    await qm.add_to_queue(chat, "Очередь 1", "Иван")
-
-    # Мокаем bot.send_message
-    fake_message = MagicMock()
-    fake_message.message_id = 123
-    context = MagicMock()
-    context.bot.send_message = AsyncMock(return_value=fake_message)
-
-    update = MagicMock()
-    update.effective_chat = chat
-    update.message = None
-
-    # Вызываем
-    await qm.send_queue_message(update, context, "Очередь 1")
-
-    # Проверяем что сообщение было отправлено
-    context.bot.send_message.assert_awaited_once()
-    args, kwargs = context.bot.send_message.call_args
-    assert kwargs["chat_id"] == chat.id
-    assert kwargs["parse_mode"] == "MarkdownV2"
-    assert kwargs["reply_markup"] == "keyboard"
-
-    # Проверяем, что сохранился last_queue_message_id
-    last_id = await qm.get_last_queue_message_id(chat.id, "Очередь 1")
-    assert last_id == 123
-
-
-@pytest.mark.asyncio
-async def test_send_queue_message_deletes_previous(qm, mocker):
-    chat = FakeChat()
-    mocker.patch("app.services.queue_manager.save_data")
-    fake_delete = mocker.patch(
-        "app.services.queue_manager.safe_delete", new_callable=AsyncMock
+def service_with_repo(monkeypatch):
+    repo = SimpleNamespace(
+        set_queue_message_id=AsyncMock(),
+        get_queue_message_id=AsyncMock(return_value=999),
+        get_all_queues=AsyncMock(),
     )
-    mocker.patch("app.services.queue_manager.queue_keyboard", return_value="keyboard")
+    service = QueueService(repo)
+    monkeypatch.setattr(service, "get_queue_text", AsyncMock(return_value="rendered"))
+    monkeypatch.setattr(service, "get_queue_index", AsyncMock(return_value=0))
+    monkeypatch.setattr(queue_service_module, "queue_keyboard", lambda idx: f"keyboard-{idx}")
+    return service, repo
 
-    # создаём очередь и сохраняем старый message_id
-    await qm.create_queue(chat, "Очередь 1")
-    await qm.set_last_queue_message_id(chat.id, "Очередь 1", 99)
 
-    fake_message = MagicMock()
-    fake_message.message_id = 123
-    context = MagicMock()
-    context.bot.send_message = AsyncMock(return_value=fake_message)
+@pytest.mark.asyncio
+async def test_update_queue_message_edits_via_query(service_with_repo):
+    service, repo = service_with_repo
+    query = SimpleNamespace(
+        edit_message_text=AsyncMock(),
+        message=SimpleNamespace(message_id=777),
+    )
 
-    update = MagicMock()
-    update.effective_chat = chat
-    update.message = None
+    await service.update_queue_message(chat_id=1, queue_name="Q1", query_or_update=query)
 
-    await qm.send_queue_message(update, context, "Очередь 1")
+    query.edit_message_text.assert_awaited_once_with(text="rendered", parse_mode="MarkdownV2", reply_markup="keyboard-0")
+    repo.set_queue_message_id.assert_awaited_once_with(1, "Q1", 777)
 
-    # Проверяем, что safe_delete вызван для старого id
-    fake_delete.assert_awaited_once()
-    args, kwargs = fake_delete.call_args
-    assert args[1].id == chat.id  # второй аргумент — chat
-    assert args[2] == 99  # третий аргумент — message_id
+
+@pytest.mark.asyncio
+async def test_update_queue_message_edits_via_context(service_with_repo):
+    service, repo = service_with_repo
+    repo.get_queue_message_id = AsyncMock(return_value=333)
+    service.repo = repo
+
+    context = SimpleNamespace(bot=SimpleNamespace(edit_message_text=AsyncMock()))
+    update = SimpleNamespace()
+
+    await service.update_queue_message(chat_id=5, queue_name="Q", query_or_update=update, context=context)
+
+    context.bot.edit_message_text.assert_awaited_once_with(
+        chat_id=5, message_id=333, text="rendered", parse_mode="MarkdownV2", reply_markup="keyboard-0"
+    )
+    service.repo.set_queue_message_id.assert_awaited_once_with(5, "Q", 333)
+
+
+@pytest.mark.asyncio
+async def test_update_queue_message_ignores_not_modified(service_with_repo):
+    service, repo = service_with_repo
+    query = SimpleNamespace(
+        edit_message_text=AsyncMock(side_effect=BadRequest("Message is not modified")),
+        message=SimpleNamespace(message_id=111),
+    )
+
+    await service.update_queue_message(chat_id=1, queue_name="Q", query_or_update=query)
+
+    repo.set_queue_message_id.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_clear_user_display_name_global(monkeypatch):
+    repo = SimpleNamespace(
+        get_user_display_name=AsyncMock(return_value={"display_names": {"global": "Old"}}),
+        update_user_display_name=AsyncMock(),
+    )
+    service = QueueService(repo)
+    user = SimpleNamespace(id=9, username=None, last_name="Last", first_name="First")
+
+    await service.clear_user_display_name(user, chat_id=None, chat_title="Chat")
+
+    repo.update_user_display_name.assert_awaited_once_with(9, {"global": "Last First"})
+
+
+@pytest.mark.asyncio
+async def test_clear_user_display_name_chat_specific(monkeypatch):
+    repo = SimpleNamespace(
+        get_user_display_name=AsyncMock(return_value={"display_names": {"123": "Custom", "global": "Base"}}),
+        update_user_display_name=AsyncMock(),
+    )
+    service = QueueService(repo)
+    user = SimpleNamespace(id=10, username="user", last_name="", first_name="Name")
+
+    await service.clear_user_display_name(user, chat_id=123, chat_title="Chat")
+
+    repo.update_user_display_name.assert_awaited_once_with(10, {"global": "Base"})
+
+
+@pytest.mark.asyncio
+async def test_update_existing_queues_info_updates_only_known_messages(monkeypatch):
+    repo = SimpleNamespace(
+        get_all_queues=AsyncMock(
+            return_value={
+                "Q1": {"queue": ["u1"], "last_queue_message_id": 5},
+                "Q2": {"queue": [], "last_queue_message_id": None},
+            }
+        )
+    )
+    service = QueueService(repo)
+    monkeypatch.setattr(service, "get_queue_text", AsyncMock(return_value="rendered"))
+    monkeypatch.setattr(queue_service_module, "queue_keyboard", lambda idx: f"keyboard-{idx}")
+
+    bot = SimpleNamespace(edit_message_text=AsyncMock())
+    chat = SimpleNamespace(id=42)
+
+    await service.update_existing_queues_info(bot, chat, chat_title="Chat")
+
+    bot.edit_message_text.assert_awaited_once_with(
+        chat_id=42,
+        message_id=5,
+        text="rendered",
+        parse_mode="MarkdownV2",
+        reply_markup="keyboard-0",
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_existing_queues_info_ignores_not_modified(monkeypatch):
+    repo = SimpleNamespace(
+        get_all_queues=AsyncMock(
+            return_value={
+                "Q1": {"queue": [], "last_queue_message_id": 5},
+            }
+        )
+    )
+    service = QueueService(repo)
+    monkeypatch.setattr(service, "get_queue_text", AsyncMock(return_value="rendered"))
+    monkeypatch.setattr(
+        queue_service_module,
+        "queue_keyboard",
+        lambda idx: f"keyboard-{idx}",
+    )
+
+    bot = SimpleNamespace(edit_message_text=AsyncMock(side_effect=BadRequest("Message is not modified")))
+    chat = SimpleNamespace(id=7)
+
+    await service.update_existing_queues_info(bot, chat, chat_title="Chat")
+
+    bot.edit_message_text.assert_awaited_once()

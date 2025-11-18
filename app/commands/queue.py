@@ -1,10 +1,11 @@
 from asyncio import create_task
 
-from queue_service import queue_service
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
-from utils.InlineKeyboards import queues_keyboard
-from utils.utils import delete_later, safe_delete
+
+from ..queue_service import queue_service
+from ..utils.InlineKeyboards import queues_keyboard
+from ..utils.utils import delete_later, safe_delete
 
 
 async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -21,7 +22,7 @@ async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         "/create [Имя очереди] — создает очередь\n"
         "/queues — посмотреть активные очереди\n"
         "/nickname [nickname] — задает отображаемое имя в чате и имеет приоритет над глобальным (без парамеров для сброса)\n"
-        "/nickname_global [nickname] — задает отображаемое всех чатах (без парамеров для сброса)\n\n"
+        "/nickname_global [nickname] — задает отображаемое имя для всех чатах (без парамеров для сброса)\n\n"
         "Команды для администраторов:\n"
         "/delete <Имя очереди> — удалить очередь\n"
         "/delete_all — удалить все очереди\n"
@@ -118,17 +119,17 @@ async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     nickname = " ".join(args) if args else None
     if nickname:
         await queue_service.set_user_display_name(user, nickname, chat.id, chat_title)
-        response = f"Установлен никнейм для пользователя {user.username}: {nickname} для {chat_title}"
+        response = f"Установлено отображаемое имя для пользователя {user.username}: {nickname} для {chat_title}"
     else:
         await queue_service.clear_user_display_name(user, chat.id, chat_title)
-        response = f"Сброшен никнейм для {chat_title} на стандартный"
+        response = f"Сброшено отображаемое имя для {chat_title} на стандартный"
 
     response_message = await context.bot.send_message(chat.id, response, message_thread_id=message_thread_id)
     create_task(delete_later(context, chat, response_message.message_id))
 
 
 async def nickname_global(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Устанавливает никнейм пользователя в очередях."""
+    """Устанавливает отображаемое имя пользователя в очередях."""
     chat: Chat = update.effective_chat
     message_id: int = update.message.message_id
     chat_title = chat.title or chat.username or "Личный чат"

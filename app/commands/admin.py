@@ -3,12 +3,12 @@ import random
 from asyncio import create_task
 from functools import wraps
 
-from config import STUDENTS_USERNAMES
-from queue_service import queue_service
-from services.logger import QueueLogger
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
-from utils.utils import delete_later, parse_queue_args, parse_users_names, safe_delete
+
+from ..queue_service import queue_service
+from ..services.logger import QueueLogger
+from ..utils.utils import delete_later, parse_queue_args, parse_users_names, safe_delete
 
 
 def admins_only(func):

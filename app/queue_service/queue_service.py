@@ -2,14 +2,14 @@
 import logging
 from typing import Optional
 
-from services.logger import QueueLogger  # если logger в services
 from telegram import Chat, User
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
-from utils.InlineKeyboards import queue_keyboard
-from utils.utils import safe_delete, strip_user_name
 
+from ..services.logger import QueueLogger  # если logger в services
+from ..utils.InlineKeyboards import queue_keyboard
+from ..utils.utils import safe_delete, strip_user_full_name
 from .queue_repository import QueueRepository
 
 
@@ -151,9 +151,7 @@ class QueueService:
         if "display_names" not in user_doc:
             user_doc["display_names"] = {}
 
-        user_doc["display_names"][chat_str] = (
-            display_name if display_name else await strip_user_name(user.last_name, user.first_name)
-        ) or None
+        user_doc["display_names"][chat_str] = (display_name if display_name else strip_user_full_name(user)) or None
         await self.repo.update_user_display_name(user.id, user_doc["display_names"])
 
         QueueLogger.log(
@@ -169,7 +167,7 @@ class QueueService:
             return
 
         if chat_str == "global":
-            user_doc["display_names"][chat_str] = (await strip_user_name(user.last_name, user.first_name)) or None
+            user_doc["display_names"][chat_str] = (strip_user_full_name(user)) or None
         else:
             user_doc["display_names"].pop(chat_str, None)
 

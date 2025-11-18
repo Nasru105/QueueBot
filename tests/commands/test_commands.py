@@ -3,51 +3,70 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.commands.queue import create, queues
+from app.commands import queue as queue_cmd
 
 
 @pytest.mark.asyncio
-async def test_create_calls_queue_manager(monkeypatch):
-    chat = SimpleNamespace(id=1, title="Chat")
+async def test_create_uses_explicit_name(monkeypatch):
+    chat = SimpleNamespace(id=42, title="ChatTitle", username=None)
+    message = SimpleNamespace(message_id=10, message_thread_id=None)
+    update = SimpleNamespace(effective_chat=chat, message=message)
+    context = SimpleNamespace(args=["My", "Queue"])
 
-    fake_qm = SimpleNamespace()
-    fake_qm.create_queue = AsyncMock()
-    fake_qm.send_queue_message = AsyncMock()
+    safe_delete = AsyncMock()
+    monkeypatch.setattr(queue_cmd, "safe_delete", safe_delete)
 
-    monkeypatch.setattr("app.commands.queue.queue_manager", fake_qm)
-
-    update = SimpleNamespace(
-        effective_chat=chat,
-        message=SimpleNamespace(message_id=10, message_thread_id=None),
+    queue_service = SimpleNamespace(
+        repo=SimpleNamespace(get_queue_message_id=AsyncMock(return_value=None)),
+        create_queue=AsyncMock(),
+        send_queue_message=AsyncMock(),
+        generate_queue_name=AsyncMock(),
     )
-    context = MagicMock()
-    context.args = ["Очередь", "1"]
+    monkeypatch.setattr(queue_cmd, "queue_service", queue_service)
 
-    await create(update, context)
+    await queue_cmd.create(update, context)
 
-    fake_qm.create_queue.assert_awaited_once_with(chat, "Очередь 1")
-    fake_qm.send_queue_message.assert_awaited_once()
+    safe_delete.assert_awaited_once_with(context, chat, message.message_id)
+    queue_service.repo.get_queue_message_id.assert_awaited_once_with(chat.id, "My Queue")
+    queue_service.create_queue.assert_awaited_once_with(chat.id, "My Queue", "ChatTitle")
+    queue_service.send_queue_message.assert_awaited_once_with(chat, None, context, "My Queue")
 
 
 @pytest.mark.asyncio
-async def test_queues_no_active(monkeypatch):
-    chat = SimpleNamespace(id=1, title="Chat")
+async def test_queues_sends_keyboard_and_tracks_message(monkeypatch):
+    chat = SimpleNamespace(id=1, title="ChatTitle", username=None)
+    message = SimpleNamespace(message_id=99, message_thread_id=None)
+    update = SimpleNamespace(effective_chat=chat, message=message)
 
-    fake_qm = SimpleNamespace()
-    fake_qm.get_queues = AsyncMock(return_value={})
-    fake_qm.get_last_queues_message_id = AsyncMock(return_value=None)
-    fake_qm.set_last_queues_message_id = AsyncMock()
+    safe_delete = AsyncMock()
+    monkeypatch.setattr(queue_cmd, "safe_delete", safe_delete)
 
-    monkeypatch.setattr("app.commands.queue.queue_manager", fake_qm)
+    keyboard = MagicMock()
+    monkeypatch.setattr(queue_cmd, "queues_keyboard", AsyncMock(return_value=keyboard))
 
-    update = SimpleNamespace(
-        effective_chat=chat,
-        message=SimpleNamespace(message_id=10, message_thread_id=None),
+    repo = SimpleNamespace(
+        get_list_message_id=AsyncMock(return_value=777),
+        get_all_queues=AsyncMock(return_value={"Q1": {}, "Q2": {}}),
+        set_list_message_id=AsyncMock(),
+        clear_list_message_id=AsyncMock(),
     )
-    context = MagicMock()
-    context.bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=77))
 
-    await queues(update, context)
+    queue_service = SimpleNamespace(repo=repo)
+    monkeypatch.setattr(queue_cmd, "queue_service", queue_service)
 
-    context.bot.send_message.assert_awaited()
-    fake_qm.set_last_queues_message_id.assert_awaited_once_with(chat.id, None)
+    sent_message = SimpleNamespace(message_id=123)
+    context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock(return_value=sent_message)))
+    context.args = []
+
+    await queue_cmd.queues(update, context)
+
+    # Команда удаляется и удаляется предыдущее меню
+    assert safe_delete.await_count == 2
+    safe_delete.assert_any_await(context, chat, message.message_id)
+    safe_delete.assert_any_await(context, chat, 777)
+
+    repo.get_list_message_id.assert_awaited_once_with(chat.id)
+    repo.set_list_message_id.assert_awaited_once_with(chat.id, 123)
+    context.bot.send_message.assert_awaited_once()
+    _, kwargs = context.bot.send_message.call_args
+    assert kwargs["reply_markup"] is keyboard
