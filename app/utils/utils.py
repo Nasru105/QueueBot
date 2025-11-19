@@ -2,18 +2,15 @@ import asyncio
 import logging
 from typing import List, Optional, Tuple
 
-from app.services.logger import QueueLogger
 from telegram import User
-from telegram.error import BadRequest
+
+from app.services.logger import QueueLogger
 
 
 # Безопасное удаление сообщения.
 async def safe_delete(context, chat, message_id):
     try:
         await context.bot.delete_message(chat_id=chat.id, message_id=message_id)
-    except BadRequest as BREx:
-        if BREx.message != "Message to delete not found":
-            raise
     except Exception as e:
         QueueLogger.log(
             chat.title or chat.username,

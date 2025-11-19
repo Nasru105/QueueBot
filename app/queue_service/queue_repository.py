@@ -17,6 +17,9 @@ class QueueRepository:
         if not doc:
             doc = {"chat_id": chat_id, "queues": [], "chat_title": title}
             await queue_collection.insert_one(doc)
+        elif title and doc.get("chat_title", None) != title:
+            await queue_collection.update_one({"chat_id": chat_id}, {"$set": {"chat_title": title}}, upsert=True)
+
         return doc
 
     async def update_chat(self, chat_id: int, update: Dict[str, Any]):
