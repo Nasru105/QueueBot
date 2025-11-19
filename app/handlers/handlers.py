@@ -1,16 +1,15 @@
+# app/handlers/queue_handlers.py
 import logging
 import traceback
 from asyncio import Lock
 
-from telegram import Update
+from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.services.storage import load_users_names, save_users_names
-
-from ..services.logger import QueueLogger
-from ..services.queue_manager import queue_manager
-from ..utils.InlineKeyboards import queue_keyboard, queues_keyboard
-from ..utils.utils import get_user_name, safe_delete, update_existing_queues_info
+from app.queue_service import queue_service
+from app.services.logger import QueueLogger
+from app.utils.InlineKeyboards import queues_keyboard
+from app.utils.utils import safe_delete
 
 # Локи на чат
 chat_locks: dict[int, Lock] = {}
@@ -22,13 +21,12 @@ def get_chat_lock(chat_id: int) -> Lock:
     return chat_locks[chat_id]
 
 
-# Кеш пользователей
-users_names_cache = load_users_names()
-
-
 async def is_user_admin(chat, user_id, context) -> bool:
-    member = await context.bot.get_chat_member(chat.id, user_id)
-    return member.status in ("administrator", "creator")
+    try:
+        member = await context.bot.get_chat_member(chat.id, user_id)
+        return member.status in ("administrator", "creator")
+    except Exception:
+        return False
 
 
 async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -39,38 +37,37 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     user = query.from_user
-    user_name = get_user_name(user)
     chat = query.message.chat
+    chat_title = chat.title or chat.username or "Личный чат"
+    user_name = await queue_service.get_user_display_name(user, chat.id)
 
     # Безопасное получение данных из callback
     try:
-        _, queue_index, action = query.data.split("|")
-        queue_index = int(queue_index)
+        _, queue_index_str, action = query.data.split("|")
+        queue_index = int(queue_index_str)
     except ValueError:
-        QueueLogger.log(chat.title or chat.username, action="Invalid callback data", level=logging.WARNING)
+        QueueLogger.log(chat_title, action="Invalid callback data", level=logging.WARNING)
         return
 
-    queues = await queue_manager.get_queues(chat.id)
+    queues = await queue_service.repo.get_all_queues(chat.id)
     if not (0 <= queue_index < len(queues)):
-        QueueLogger.log(chat.title or chat.username, action="Invalid queue index", level=logging.WARNING)
+        QueueLogger.log(chat_title, action="Invalid queue index", level=logging.WARNING)
         return
-    queue_name = list(queues)[queue_index]
 
-    # Добавляем пользователя в кеш, если нужно
-    if str(user.id) not in users_names_cache:
-        users_names_cache[str(user.id)] = user_name
-        save_users_names(users_names_cache)
+    queue_name = list(queues.keys())[queue_index]
 
     async with get_chat_lock(chat.id):
-        current_queue = await queue_manager.get_queue(chat.id, queue_name)
+        current_queue = await queue_service.repo.get_queue(chat.id, queue_name)
         if action == "join" and user_name not in current_queue:
-            await queue_manager.add_to_queue(chat, queue_name, user_name)
+            await queue_service.add_to_queue(chat.id, queue_name, user_name, chat_title)
         elif action == "leave" and user_name in current_queue:
-            await queue_manager.remove_from_queue(chat, queue_name, user_name)
+            await queue_service.remove_from_queue(chat.id, queue_name, user_name, chat_title)
         else:
-            return  # действие не применимо
+            return
 
-    await queue_manager.update_queue_message(chat, query, queue_name, context)
+    await queue_service.update_queue_message(
+        chat_id=chat.id, queue_name=queue_name, query_or_update=query, context=context, chat_title=chat_title
+    )
 
 
 async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -82,120 +79,104 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     user_id = query.from_user.id
     chat = query.message.chat
+    chat_title = chat.title or chat.username or "Личный чат"
 
     try:
-        _, queue_index, action = query.data.split("|")
+        _, queue_index_str, action = query.data.split("|")
     except ValueError:
-        QueueLogger.log(chat.title or chat.username, action="Invalid callback data", level=logging.WARNING)
+        QueueLogger.log(chat_title, action="Invalid callback data", level=logging.WARNING)
         return
-
-    queues = await queue_manager.get_queues(chat.id)
 
     if action == "hide":
-        # Удаляем старое меню очередей
-        last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
+        last_queues_id = await queue_service.repo.get_list_message_id(chat.id)
         if last_queues_id:
             await safe_delete(context, chat, last_queues_id)
-            await queue_manager.delete_last_queues_message_id(chat.id, last_queues_id)
+            await queue_service.repo.clear_list_message_id(chat.id)
         return
 
-    if queue_index != "all":
+    queues = await queue_service.repo.get_all_queues(chat.id)
+
+    if queue_index_str == "all":
+        queue_name = None
+    else:
         try:
-            queue_index = int(queue_index)
+            queue_index = int(queue_index_str)
             if not (0 <= queue_index < len(queues)):
-                QueueLogger.log(
-                    chat.title or chat.username, action="Invalid queue index in queues menu", level=logging.WARNING
-                )
+                QueueLogger.log(chat_title, action="Invalid queue index", level=logging.WARNING)
                 return
-            queue_name = list(queues)[queue_index]
+            queue_name = list(queues.keys())[queue_index]
         except ValueError:
-            QueueLogger.log(
-                chat.title or chat.username, action="Invalid queue index format in queues menu", level=logging.WARNING
-            )
+            QueueLogger.log(chat_title, action="Invalid queue index format", level=logging.WARNING)
             return
 
     # Показать очередь
-    if action == "get":
-        await show_queue(chat, queue_name, query, context)
+    if action == "get" and queue_name:
+        await show_queue(query, context, chat, queue_name, chat_title)
+
     # Удалить все очереди
-    elif action == "delete" and queue_index == "all":
+    elif action == "delete" and queue_index_str == "all":
         if chat.title and not await is_user_admin(chat, user_id, context):
+            await query.answer("Только админы могут удалять все очереди!", show_alert=True)
             return
         async with get_chat_lock(chat.id):
-            await delete_all_queues(chat, context)
+            await delete_all_queues(chat, context, chat_title)
+
     # Удалить конкретную очередь
-    elif action == "delete":
+    elif action == "delete" and queue_name:
         if chat.title and not await is_user_admin(chat, user_id, context):
+            await query.answer("Только админы могут удалять очереди!", show_alert=True)
             return
         async with get_chat_lock(chat.id):
-            await delete_queue(chat, queue_name, query, context)
+            await delete_queue(chat, queue_name, query, context, chat_title)
 
 
-async def show_queue(chat, queue_name, query, context):
-    message_thread_id = query.message.message_thread_id
+async def show_queue(query, context: ContextTypes.DEFAULT_TYPE, chat: Chat, queue_name: str, chat_title: str):
+    # Передаём chat и thread_id напрямую
+    thread_id = query.message.message_thread_id if query.message else None
 
-    # Удаляем старое сообщение очереди
-    last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+    await queue_service.send_queue_message(chat=chat, thread_id=thread_id, context=context, queue_name=queue_name)
+
+
+async def delete_all_queues(chat, context: ContextTypes.DEFAULT_TYPE, chat_title: str):
+    # Удаляем меню очередей
+    last_id = await queue_service.repo.get_list_message_id(chat.id)
     if last_id:
         await safe_delete(context, chat, last_id)
 
-    queues = await queue_manager.get_queues(chat.id)
-    queue_index = list(queues).index(queue_name)
-
-    sent = await context.bot.send_message(
-        chat_id=chat.id,
-        text=await queue_manager.get_queue_text(chat.id, queue_name),
-        parse_mode="MarkdownV2",
-        reply_markup=queue_keyboard(queue_index),
-        message_thread_id=message_thread_id,
-    )
-    await queue_manager.set_last_queue_message_id(chat.id, queue_name, sent.message_id)
-
-
-async def delete_all_queues(chat, context):
-    # Удаляем старое меню очередей
-    last_queues_id = await queue_manager.get_last_queues_message_id(chat.id)
-    if last_queues_id:
-        await safe_delete(context, chat, last_queues_id)
-
-    queues = await queue_manager.get_queues(chat.id)
+    queues = await queue_service.repo.get_all_queues(chat.id)
     for queue_name in list(queues.keys()):
-        last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+        last_id = await queue_service.repo.get_queue_message_id(chat.id, queue_name)
         if last_id:
             await safe_delete(context, chat, last_id)
-        await queue_manager.delete_queue(chat, queue_name)
+        await queue_service.delete_queue(chat.id, queue_name, chat_title)
 
 
-async def delete_queue(chat, queue_name, query, context):
+async def delete_queue(chat, queue_name: str, query, context: ContextTypes.DEFAULT_TYPE, chat_title: str):
     message = query.message
 
-    # Удаляем старое сообщение очереди
-    last_id = await queue_manager.get_last_queue_message_id(chat.id, queue_name)
+    # Удаляем сообщение очереди
+    last_id = await queue_service.repo.get_queue_message_id(chat.id, queue_name)
     if last_id:
         await safe_delete(context, chat, last_id)
 
-    await queue_manager.delete_queue(chat, queue_name)
+    await queue_service.delete_queue(chat.id, queue_name, chat_title)
 
     # Обновляем меню очередей
-    queues = await queue_manager.get_queues(chat.id)
-    await update_existing_queues_info(context.bot, queue_manager, chat, queues)
+    queues = await queue_service.repo.get_all_queues(chat.id)
+    await queue_service.update_existing_queues_info(context.bot, chat, queues)
 
-    if list(queues):
-        new_keyboard = await queues_keyboard(list(queues))
+    if queues:
+        new_keyboard = await queues_keyboard(list(queues.keys()))
         await message.edit_reply_markup(reply_markup=new_keyboard)
     else:
         await safe_delete(context, chat, message.message_id)
 
 
-async def error_handler(update, context):
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Глобальный обработчик ошибок.
-    Логирует все необработанные исключения, возникающие во время работы бота.
     """
-    if update and update.effective_chat:
-        chat_title = update.effective_chat.title or update.effective_chat.username
-    else:
-        chat_title = "Unknown Chat"
+    chat_title = update.effective_chat.title if update and update.effective_chat else "Unknown Chat"
 
     error_trace = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
     QueueLogger.log(
