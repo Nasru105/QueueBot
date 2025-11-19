@@ -1,12 +1,11 @@
-from app.handlers.handlers import error_handler, handle_queue_button, handle_queues_button
 from telegram.ext import CallbackQueryHandler, CommandHandler
+
+from app.handlers.handlers import error_handler, handle_queue_button, handle_queues_button
 
 from .admin import (
     admin_help,
     delete_all_queues,
     delete_queue,
-    generate_queue,
-    get_list_of_students,
     insert_user,
     remove_user,
     rename_queue,
@@ -32,8 +31,8 @@ def register_handlers(app):
     app.add_handler(CommandHandler("rename", rename_queue))
 
     app.add_handler(CommandHandler("admin_help", admin_help))
-    app.add_handler(CommandHandler("generate", generate_queue))
-    app.add_handler(CommandHandler("getlist", get_list_of_students))
+    # app.add_handler(CommandHandler("generate", generate_queue))
+    # app.add_handler(CommandHandler("getlist", get_list_of_students))
 
     app.add_handler(CallbackQueryHandler(handle_queue_button, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(handle_queues_button, pattern=r"^queues\|"))

@@ -1,20 +1,20 @@
 # app/bot.py
 import asyncio
 import os
-
-from commands import register_handlers, set_commands
-from dotenv import load_dotenv
-from services.logger import logger
-from services.mongo_storage import ensure_indexes
-from telegram.ext import Application, ApplicationBuilder
+import sys
+from pathlib import Path
 
 # Фикс импортов при запуске как скрипт
 if __package__ is None:
-    import sys
-    from pathlib import Path
-
     project_root = str(Path(__file__).resolve().parent.parent)
     sys.path.insert(0, project_root)
+
+from dotenv import load_dotenv
+from telegram.ext import Application, ApplicationBuilder
+
+from app.commands import register_handlers, set_commands
+from app.services.logger import logger
+from app.services.mongo_storage import ensure_indexes
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")

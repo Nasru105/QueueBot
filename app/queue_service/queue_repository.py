@@ -2,8 +2,8 @@ from typing import Any, Dict, List, Optional
 
 from telegram import User
 
-from ..services.mongo_storage import queue_collection, user_collection
-from ..utils.utils import strip_user_full_name
+from app.services.mongo_storage import queue_collection, user_collection
+from app.utils.utils import strip_user_full_name
 
 
 class QueueRepository:

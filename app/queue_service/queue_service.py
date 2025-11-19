@@ -7,9 +7,10 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
-from ..services.logger import QueueLogger  # если logger в services
-from ..utils.InlineKeyboards import queue_keyboard
-from ..utils.utils import safe_delete, strip_user_full_name
+from app.services.logger import QueueLogger  # если logger в services
+from app.utils.InlineKeyboards import queue_keyboard
+from app.utils.utils import safe_delete, strip_user_full_name
+
 from .queue_repository import QueueRepository
 
 

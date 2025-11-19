@@ -3,9 +3,9 @@ from asyncio import create_task
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from ..queue_service import queue_service
-from ..utils.InlineKeyboards import queues_keyboard
-from ..utils.utils import delete_later, safe_delete
+from app.queue_service import queue_service
+from app.utils.InlineKeyboards import queues_keyboard
+from app.utils.utils import delete_later, safe_delete
 
 
 async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

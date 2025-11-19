@@ -5,10 +5,10 @@ from asyncio import Lock
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from ..queue_service import queue_service
-from ..services.logger import QueueLogger
-from ..utils.InlineKeyboards import queues_keyboard
-from ..utils.utils import safe_delete
+from app.queue_service import queue_service
+from app.services.logger import QueueLogger
+from app.utils.InlineKeyboards import queues_keyboard
+from app.utils.utils import safe_delete
 
 # Локи на чат
 chat_locks: dict[int, Lock] = {}

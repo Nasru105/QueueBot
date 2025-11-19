@@ -2,10 +2,9 @@ import asyncio
 import logging
 from typing import List, Optional, Tuple
 
+from app.services.logger import QueueLogger
 from telegram import User
 from telegram.error import BadRequest
-
-from ..services.logger import QueueLogger
 
 
 # Безопасное удаление сообщения.
