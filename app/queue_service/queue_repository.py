@@ -7,7 +7,7 @@ from app.utils.utils import strip_user_full_name
 
 
 class QueueRepository:
-    """Низкоуровневые операции с MongoDB — только CRUD"""
+    """Низкоуровневые операции с MongoDB"""
 
     async def get_chat(self, chat_id: int) -> Optional[Dict]:
         return await queue_collection.find_one({"chat_id": chat_id})
@@ -17,7 +17,7 @@ class QueueRepository:
         if not doc:
             doc = {"chat_id": chat_id, "queues": [], "chat_title": title}
             await queue_collection.insert_one(doc)
-        elif title and doc.get("chat_title", None) != title:
+        elif title and doc.get("chat_title") != title:
             await queue_collection.update_one({"chat_id": chat_id}, {"$set": {"chat_title": title}}, upsert=True)
 
         return doc
@@ -79,17 +79,21 @@ class QueueRepository:
         await self.update_chat(chat_id, {"queues": doc["queues"]})
         return position
 
-    async def create_queue(self, chat_id: int, chat_title: int, queue_name: str):
+    async def create_queue(self, chat_id: int, chat_title: str, queue_name: str):
         doc = await self.create_or_get_chat(chat_id, chat_title)
-        # Check if queue already exists
-        for q in doc.get("queues", []):
-            if q.get("name") == queue_name:
-                return  # Queue already exists
 
-        # Add new queue to the array
+        # гарантируем, что есть массив queues
+        queues = doc.setdefault("queues", [])
+
+        # проверяем, нет ли очереди с таким именем
+        if any(q.get("name") == queue_name for q in queues):
+            return
+
+        # добавляем новую очередь
         new_queue = {"name": queue_name, "queue": [], "last_queue_message_id": None}
-        doc["queues"].append(new_queue)
-        await self.update_chat(chat_id, {"queues": doc["queues"]})
+        queues.append(new_queue)
+
+        await self.update_chat(chat_id, {"queues": queues})
 
     async def delete_queue(self, chat_id: int, queue_name: str) -> bool:
         """

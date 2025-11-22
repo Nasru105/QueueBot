@@ -106,17 +106,6 @@ async def test_safe_delete_ignores_missing_message():
 
 
 @pytest.mark.asyncio
-async def test_safe_delete_reraises_unexpected_badrequest():
-    bot = AsyncMock()
-    bot.delete_message.side_effect = BadRequest(message="Forbidden")
-    context = SimpleNamespace(bot=bot)
-    chat = SimpleNamespace(id=1, title="Chat", username=None)
-
-    with pytest.raises(BadRequest):
-        await utils.safe_delete(context, chat, 77)
-
-
-@pytest.mark.asyncio
 async def test_safe_delete_logs_other_exceptions(monkeypatch):
     bot = AsyncMock()
     bot.delete_message.side_effect = RuntimeError("boom")

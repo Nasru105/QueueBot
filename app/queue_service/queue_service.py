@@ -15,8 +15,6 @@ from .queue_repository import QueueRepository
 
 
 class QueueService:
-    """Бизнес-логика: чистые методы, логирование, валидация"""
-
     def __init__(self, repo: QueueRepository):
         self.repo = repo
 
@@ -119,7 +117,7 @@ class QueueService:
 
     async def rename_queue(self, chat_id: int, old_name: str, new_name: str, chat_title: str):
         await self.repo.rename_queue(chat_id, old_name, new_name)
-        QueueLogger.log(chat_title, f"{old_name} → {new_name}", "rename queue")
+        QueueLogger.log(chat_title, old_name, f"renamed queue to {new_name}")
 
     async def generate_queue_name(self, chat_id: int) -> str:
         i = 1

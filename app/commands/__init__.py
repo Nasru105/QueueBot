@@ -30,7 +30,7 @@ def register_handlers(app):
     app.add_handler(CommandHandler("replace", replace_users))
     app.add_handler(CommandHandler("rename", rename_queue))
 
-    app.add_handler(CommandHandler("admin_help", admin_help))
+    # app.add_handler(CommandHandler("admin_help", admin_help))
     # app.add_handler(CommandHandler("generate", generate_queue))
     # app.add_handler(CommandHandler("getlist", get_list_of_students))
 

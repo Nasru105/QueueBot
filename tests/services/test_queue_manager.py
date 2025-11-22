@@ -1,11 +1,11 @@
+from importlib import import_module
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from importlib import import_module
 
 import pytest
+from telegram.error import BadRequest
 
 from app.queue_service.queue_service import QueueService
-from telegram.error import BadRequest
 
 queue_service_module = import_module("app.queue_service.queue_service")
 
@@ -91,7 +91,9 @@ async def test_update_queue_message_edits_via_query(service_with_repo):
 
     await service.update_queue_message(chat_id=1, queue_name="Q1", query_or_update=query)
 
-    query.edit_message_text.assert_awaited_once_with(text="rendered", parse_mode="MarkdownV2", reply_markup="keyboard-0")
+    query.edit_message_text.assert_awaited_once_with(
+        text="rendered", parse_mode="MarkdownV2", reply_markup="keyboard-0"
+    )
     repo.set_queue_message_id.assert_awaited_once_with(1, "Q1", 777)
 
 
