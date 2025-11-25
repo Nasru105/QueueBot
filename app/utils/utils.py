@@ -8,12 +8,12 @@ from app.services.logger import QueueLogger
 
 
 # Безопасное удаление сообщения.
-async def safe_delete(context, chat, message_id):
+async def safe_delete(context, ctx, message_id):
     try:
-        await context.bot.delete_message(chat_id=chat.id, message_id=message_id)
+        await context.bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
         QueueLogger.log(
-            chat.title or chat.username,
+            ctx.chat_title,
             action=f"Не удалось удалить сообщение {message_id}: {e}",
             level=logging.WARNING,
         )
@@ -31,9 +31,9 @@ def strip_user_full_name(user: User) -> str:
     )
 
 
-async def delete_later(context, chat, message_id, time=5):
+async def delete_later(context, ctx, message_id, time=5):
     await asyncio.sleep(time)
-    await safe_delete(context, chat, message_id)
+    await safe_delete(context, ctx, message_id)
 
 
 # app/queues_service/__init__.py или utils

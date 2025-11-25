@@ -22,6 +22,7 @@ class SafeFormatter(jsonlogger.JsonFormatter):
         super().add_fields(log_record, record, message_dict)
         log_record.setdefault("chat_title", getattr(record, "chat_title", "-"))
         log_record.setdefault("queue", getattr(record, "queue", "-"))
+        log_record.setdefault("actor", getattr(record, "actor", "-"))
 
     def process_log_record(self, log_record):
         # стандартная обработка jsonlogger
@@ -29,11 +30,12 @@ class SafeFormatter(jsonlogger.JsonFormatter):
 
         # собираем ключи в нужном порядке
         ordered = OrderedDict()
-        ordered["asctime"] = log_record.pop("asctime", "")
-        ordered["level"] = log_record.pop("levelname", "").lower()
-        ordered["chat_title"] = log_record.pop("chat_title", "-")
-        ordered["queue"] = log_record.pop("queue", "-")
-        ordered["message"] = log_record.pop("message", "")
+        ordered["message"] = log_record.pop("message", None)
+        ordered["asctime"] = log_record.pop("asctime", None)
+        ordered["level"] = log_record.pop("levelname", None).lower()
+        ordered["chat_title"] = log_record.pop("chat_title", None)
+        ordered["queue"] = log_record.pop("queue", None)
+        ordered["actor"] = log_record.pop("actor", None)
 
         # остальные поля — в конце
         for k, v in log_record.items():
@@ -47,7 +49,7 @@ class SafeFormatter(jsonlogger.JsonFormatter):
 
 
 formatter = SafeFormatter(
-    fmt="%(asctime)s | %(levelname)s | %(chat_title)s | %(queue)s | %(message)s",
+    fmt="%(asctime)s | %(levelname)s | %(chat_title)s | %(queue)s | %(message)s | %(actor)s",
     datefmt="%d.%m.%Y %H:%M:%S",
     json_ensure_ascii=False,
 )
@@ -91,33 +93,42 @@ class QueueLogger:
         cls,
         chat_title: Optional[str] = "Unknown Chat",
         queue_name: str = "Unknown queue",
+        actor: str = "Unknown actor",
         action: str = "action",
         level: int = logging.INFO,
     ) -> None:
-        logger.log(level, action, extra={"chat_title": chat_title, "queue": queue_name})
+        logger.log(level, action, extra={"chat_title": chat_title, "queue": queue_name, "actor": actor})
 
     @classmethod
-    def joined(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
-        cls.log(chat_title, queue_name, f"join {user_name} ({position})")
+    def joined(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+        cls.log(chat_title, queue_name, actor, f"join {user_name} ({position})")
 
     @classmethod
-    def leaved(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
-        cls.log(chat_title, queue_name, f"leave {user_name} ({position})")
+    def leaved(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+        cls.log(chat_title, queue_name, actor, f"leave {user_name} ({position})")
 
     @classmethod
-    def inserted(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
-        cls.log(chat_title, queue_name, f"insert {user_name} ({position})")
+    def inserted(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+        cls.log(chat_title, queue_name, actor, f"insert {user_name} ({position})")
 
     @classmethod
-    def removed(cls, chat_title: Optional[str], queue_name: str, user_name: str, position: int) -> None:
-        cls.log(chat_title, queue_name, f"remove {user_name} ({position})")
+    def removed(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+        cls.log(chat_title, queue_name, actor, f"remove {user_name} ({position})")
 
     @classmethod
     def replaced(
-        cls, chat_title: Optional[str], queue_name: str, user_name1: str, pos1: int, user_name2: str, pos2: int
+        cls,
+        chat_title: Optional[str],
+        queue_name: str,
+        actor: str,
+        user_name1: str,
+        pos1: int,
+        user_name2: str,
+        pos2: int,
     ) -> None:
         cls.log(
             chat_title,
             queue_name,
+            actor,
             f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})",
         )
