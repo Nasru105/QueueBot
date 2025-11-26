@@ -5,10 +5,9 @@ from functools import wraps
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.queue_service import queue_service
-from app.queue_service.queue_service import ActionContext
-from app.services.logger import QueueLogger
-from app.utils.utils import delete_later, parse_queue_args, parse_users_names, safe_delete
+from app.queues import queue_service
+from app.queues.models import ActionContext
+from app.utils.utils import delete_later, parse_queue_args, safe_delete
 
 
 def admins_only(func):
@@ -99,7 +98,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await queue_service.delete_queue(ctx)
 
     # Обновляем меню и все очереди
-    await queue_service.update_existing_queues_info(context.bot, ctx)
+    await queue_service.mass_update_existing_queues(context.bot, ctx)
 
 
 @admins_only
@@ -135,7 +134,6 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id: int = update.message.message_id
     chat_title = chat.title or chat.username or "Личный чат"
     message_thread_id = update.message.message_thread_id if update.message else None
-
     user = update.effective_user
     actor = user.username or "Unknown"
     ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
@@ -209,170 +207,40 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admins_only
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat: Chat = update.effective_chat
-    message_id: int = update.message.message_id
     chat_title = chat.title or chat.username or "Личный чат"
     message_thread_id = update.message.message_thread_id if update.message else None
     user = update.effective_user
     actor = user.username or "Unknown"
     ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
 
-    await safe_delete(context, ctx, message_id)
+    await safe_delete(context, ctx, update.message.message_id)
 
     args = context.args
     if len(args) < 3:
-        error_msg = "Использование:\n/replace <Очередь> <№1> <№2>\nили\n/replace <Очередь> <Имя 1> <Имя 2>"
+        err = await context.bot.send_message(
+            chat.id,
+            "Использование:\n/replace <Очередь> <№1> <№2> или /replace <Очередь> <Имя 1> <Имя 2>",
+            message_thread_id=message_thread_id,
+        )
+        create_task(delete_later(context, ctx, err.message_id))
+        return
+
+    # --- 1. Парсим имя очереди ---
+    queue_names = list((await queue_service.repo.get_all_queues(chat.id)).keys())
+    queue_name = None
+
+    queue_name, rest_names = parse_queue_args(args, queue_names)
+    ctx.queue_name = queue_name
+
+    if not queue_name:
         error_message = await context.bot.send_message(
-            chat_id=chat.id, text=error_msg, message_thread_id=message_thread_id
+            chat_id=chat.id, text="Очередь не найдена.", message_thread_id=message_thread_id
         )
         create_task(delete_later(context, chat, error_message.message_id))
         return
 
-    queue_name = None
-    pos1 = pos2 = None
-    user_name_1 = user_name_2 = None
-
-    # Попытка: по позициям
-    try:
-        pos1 = int(args[-2]) - 1
-        pos2 = int(args[-1]) - 1
-        queue_name = " ".join(args[:-2])
-        mode = "positions"
-    except ValueError:
-        mode = "names"
-
-    if mode == "names":
-        # Режим: по именам
-        queue_names = list((await queue_service.repo.get_all_queues(chat.id)).keys())
-        queue_name, rest = parse_queue_args(args, queue_names)
-
-        if not queue_name:
-            error_message = await context.bot.send_message(
-                chat_id=chat.id, text="Очередь не найдена.", message_thread_id=message_thread_id
-            )
-            create_task(delete_later(context, chat, error_message.message_id))
-            return
-
-        queue = await queue_service.repo.get_queue(chat.id, queue_name)
-        user_name_1, user_name_2 = parse_users_names(rest, queue)
-
-        if not user_name_1 or not user_name_2:
-            error_message = await context.bot.send_message(
-                chat_id=chat.id,
-                text=f"Один или оба пользователя не найдены в очереди «{queue_name}».",
-                message_thread_id=message_thread_id,
-            )
-            create_task(delete_later(context, chat, error_message.message_id))
-            return
-
-        pos1 = queue.index(user_name_1)
-        pos2 = queue.index(user_name_2)
-
-    else:
-        # Режим: по позициям
-        if not queue_name.strip():
-            error_message = await context.bot.send_message(
-                chat_id=chat.id, text="Укажите имя очереди.", message_thread_id=message_thread_id
-            )
-            create_task(delete_later(context, chat, error_message.message_id))
-            return
-
-        if pos1 < 0 or pos2 < 0:
-            error_message = await context.bot.send_message(
-                chat_id=chat.id,
-                text="Позиции должны быть положительными.",
-                message_thread_id=message_thread_id,
-            )
-            create_task(delete_later(context, chat, error_message.message_id))
-            return
-
-        if pos1 == pos2:
-            return  # ничего не делаем
-
-    # Получаем очередь (если ещё не получили)
-    if mode == "positions":
-        queue = await queue_service.repo.get_queue(chat.id, queue_name)
-        if not queue:
-            error_message = await context.bot.send_message(
-                chat_id=chat.id,
-                text=f"Очередь «{queue_name}» не найдена или пуста.",
-                message_thread_id=message_thread_id,
-            )
-            create_task(delete_later(context, chat, error_message.message_id))
-            return
-
-        if max(pos1, pos2) >= len(queue):
-            error_message = await context.bot.send_message(
-                chat_id=chat.id,
-                text="Одна из позиций выходит за пределы очереди.",
-                message_thread_id=message_thread_id,
-            )
-            create_task(delete_later(context, chat, error_message.message_id))
-            return
-
-        user1, user2 = queue[pos1], queue[pos2]
-    else:
-        user1, user2 = user_name_1, user_name_2
-
-    # Меняем местами
-    queue[pos1], queue[pos2] = queue[pos2], queue[pos1]
-
-    # Сохраняем
-    await queue_service.repo.update_queue(chat.id, queue_name, queue)
-    ctx.queue_name = queue_name
-    # Логируем
-    QueueLogger.replaced(chat_title, queue_name, actor, user1, pos1 + 1, user2, pos2 + 1)
-
-    # Обновляем сообщение
+    await queue_service.replace_users_queue(ctx, rest_names)
     await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
-
-
-# async def generate_students_list(update: Update, context: ContextTypes.DEFAULT_TYPE, shuffle: bool):
-#     chat = update.effective_chat
-#     chat_title = chat.title or chat.username or "Личный чат"
-#     message_id = update.message.message_id
-
-#     await safe_delete(context, chat, message_id)
-
-#     args = context.args
-#     subgroup = None
-
-#     if args and args[-1].upper() in ("A", "B"):
-#         subgroup = args.pop(-1).upper()
-
-#     queue_name = " ".join(args) if args else await queue_service.generate_queue_name(chat.id)
-
-#     # Создаём очередь
-#     await queue_service.create_queue(chat.id, queue_name, chat_title)
-
-#     # Формируем список студентов
-#     students = [(username, group) for username, group in STUDENTS_USERNAMES.values()]
-#     if shuffle:
-#         random.shuffle(students)
-
-#     added_count = 0
-#     for username, group in students:
-#         if not subgroup or group == subgroup:
-#             await queue_service.add_to_queue(chat.id, queue_name, username, chat_title)
-#             added_count += 1
-
-#     if added_count == 0:
-#         error_message = await context.bot.send_message("Нет пользователей для добавления.")
-#         create_task(delete_later(chat.id, context, chat, error_message.message_id))
-
-#         await queue_service.delete_queue(chat.id, queue_name, chat_title)
-#         return
-
-#     await queue_service.send_queue_message(chat, update.message.message_thread_id, context, queue_name)
-
-
-# @admins_only
-# async def generate_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     await generate_students_list(update, context, shuffle=True)
-
-
-# @admins_only
-# async def get_list_of_students(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     await generate_students_list(update, context, shuffle=False)
 
 
 @admins_only

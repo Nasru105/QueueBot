@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from telegram.error import BadRequest
 
-from app.queue_service.queue_service import QueueService
+from app.queues.service import QueueService
 
 queue_service_module = import_module("app.queue_service.queue_service")
 

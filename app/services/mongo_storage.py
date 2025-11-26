@@ -9,14 +9,13 @@ from .logger import QueueLogger
 
 load_dotenv()
 
-MONGO_PUBLIC_URL = os.getenv("MONGO_PUBLIC_URL", "mongodb://localhost:27017")
-print(MONGO_PUBLIC_URL)
-if not MONGO_PUBLIC_URL:
-    MONGO_PUBLIC_URL = "mongodb://localhost:27017"
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+print(MONGO_URL)
+
 
 DB_NAME = "queue_bot"
 
-client = AsyncIOMotorClient(MONGO_PUBLIC_URL)
+client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 queue_collection = db["queue_data"]
 user_collection = db["user_data"]

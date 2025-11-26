@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.queue_service import queue_repository as repo_module
-from app.queue_service.queue_repository import QueueRepository
+from app.queues import queue_repository as repo_module
+from app.queues.queue_repository import QueueRepository
 
 
 class FakeResult:

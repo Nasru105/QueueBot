@@ -3,8 +3,8 @@ from asyncio import create_task
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.queue_service import queue_service
-from app.queue_service.queue_service import ActionContext
+from app.queues import queue_service
+from app.queues.models import ActionContext
 from app.utils.InlineKeyboards import queues_keyboard
 from app.utils.utils import delete_later, safe_delete
 
@@ -18,7 +18,9 @@ async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     message_thread_id = update.message.message_thread_id
     chat_title = chat.title or chat.username or "Личный чат"
 
-    ctx = ActionContext(chat.id, chat_title, thread_id=message_thread_id)
+    ctx = ActionContext(
+        chat.id, chat_title, queue_name=None, actor=update.effective_user.username, thread_id=message_thread_id
+    )
 
     await safe_delete(context, ctx, message_id)
 
@@ -114,35 +116,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         create_task(delete_later(context, ctx, sent.message_id, 10))
 
 
-async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Устанавливает никнейм пользователя в очередях."""
-    chat: Chat = update.effective_chat
-    message_id: int = update.message.message_id
-    chat_title = chat.title or chat.username or "Личный чат"
-    message_thread_id = update.message.message_thread_id if update.message else None
-    user = update.effective_user
-    actor = user.username or "Unknown"
-    ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
-
-    # Удаляем команду
-    await safe_delete(context, ctx, message_id)
-
-    args = context.args
-
-    nickname = " ".join(args) if args else None
-
-    if nickname:
-        await queue_service.set_user_display_name(ctx, user, nickname)
-        response = f"Установлено отображаемое имя для пользователя {user.username}: {nickname} в чате {chat_title}"
-    else:
-        await queue_service.clear_user_display_name(ctx, user)
-        response = f"Сброшено отображаемое имя для {chat_title} на стандартный"
-
-    response_message = await context.bot.send_message(chat.id, response, message_thread_id=message_thread_id)
-    create_task(delete_later(context, ctx, response_message.message_id))
-
-
-async def nickname_global(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, global_mode=False) -> None:
     """Устанавливает отображаемое имя пользователя в очередях."""
     chat: Chat = update.effective_chat
     message_id: int = update.message.message_id
@@ -152,18 +126,34 @@ async def nickname_global(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     actor = user.username or "Unknown"
     ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
 
-    # Удаляем команду
     await safe_delete(context, ctx, message_id)
-
     args = context.args
     nickname = " ".join(args) if args else None
 
     if nickname:
-        await queue_service.set_user_display_name(ctx, user, nickname)
-        response = f"Установлен глобальный никнейм для пользователя {user.username}: {nickname}"
+        await queue_service.set_user_display_name(ctx, user, nickname, global_mode)
+        response = (
+            f"Установлено глобальное отображаемое имя для пользователя {user.username}: {nickname}"
+            if global_mode
+            else f"Установлено отображаемое имя для пользователя {user.username}: {nickname} в чате {chat_title}"
+        )
     else:
-        await queue_service.clear_user_display_name(ctx, user)
-        response = "Сброшен глобальный никнейм на стандартный"
+        await queue_service.clear_user_display_name(ctx, user, global_mode)
+        response = (
+            "Сброшено глобальное отображаемое имя на стандартное"
+            if global_mode
+            else f"Сброшено отображаемое имя для {chat_title} на стандартное"
+        )
 
     response_message = await context.bot.send_message(chat.id, response, message_thread_id=message_thread_id)
     create_task(delete_later(context, ctx, response_message.message_id))
+
+
+async def chat_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Устанавливает никнейм пользователя в очередях."""
+    await nickname(update, context, global_mode=False)
+
+
+async def global_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Устанавливает отображаемое имя пользователя в очередях."""
+    await nickname(update, context, global_mode=True)

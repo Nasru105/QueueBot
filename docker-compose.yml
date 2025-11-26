@@ -1,0 +1,51 @@
+
+services:
+  bot:
+    build: .
+    container_name: queuebot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - mongo
+    volumes:
+      - .:/app
+    networks:
+      - internal
+
+  mongo:
+    image: mongo:8.0
+    container_name: queuebot_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    command: --wiredTigerCacheSizeGB 1 --auth
+    networks:
+      - internal
+
+
+  # Опционально: UI для просмотра Mongo
+  mongo-express:
+    image: mongo-express:1.0
+    container_name: queuebot_mongo_express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_USER}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASS}
+      ME_CONFIG_MONGODB_SERVER: mongo
+    depends_on:
+      - mongo
+    networks:
+      - internal
+
+volumes:
+  mongo_data:
+
+networks:
+  internal:

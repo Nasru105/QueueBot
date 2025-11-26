@@ -6,8 +6,8 @@ from asyncio import Lock
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.queue_service import queue_service
-from app.queue_service.queue_service import ActionContext
+from app.queues import queue_service
+from app.queues.models import ActionContext
 from app.services.logger import QueueLogger
 from app.utils.InlineKeyboards import queues_keyboard
 from app.utils.utils import safe_delete
@@ -169,7 +169,7 @@ async def delete_queue(ctx: ActionContext, query, context: ContextTypes.DEFAULT_
 
     # Обновляем меню очередей
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    await queue_service.update_existing_queues_info(context.bot, ctx)
+    await queue_service.mass_update_existing_queues(context.bot, ctx)
 
     if queues:
         new_keyboard = await queues_keyboard(list(queues.keys()))
