@@ -16,6 +16,11 @@ if os.name != "nt":  # не для Windows
 logger = logging.getLogger("QueueLogger")
 logger.setLevel(logging.INFO)
 
+# === ПАПКА ДЛЯ ЛОГОВ (важно для Loki/Promtail) ===
+LOG_DIR = os.environ.get("LOG_DIR", "/var/log/queuebot")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "queue.log")
+
 
 class SafeFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
@@ -25,10 +30,8 @@ class SafeFormatter(jsonlogger.JsonFormatter):
         log_record.setdefault("actor", getattr(record, "actor", "-"))
 
     def process_log_record(self, log_record):
-        # стандартная обработка jsonlogger
         log_record = super().process_log_record(log_record)
 
-        # собираем ключи в нужном порядке
         ordered = OrderedDict()
         ordered["message"] = log_record.pop("message", None)
         ordered["asctime"] = log_record.pop("asctime", None)
@@ -37,14 +40,12 @@ class SafeFormatter(jsonlogger.JsonFormatter):
         ordered["queue"] = log_record.pop("queue", None)
         ordered["actor"] = log_record.pop("actor", None)
 
-        # остальные поля — в конце
         for k, v in log_record.items():
             ordered[k] = v
 
         return ordered
 
     def to_json(self, record_dict):
-        # ensure_ascii=False — важно для кириллицы
         return json.dumps(record_dict, ensure_ascii=False)
 
 
@@ -73,21 +74,15 @@ stderr_handler = logging.StreamHandler(sys.stderr)
 stderr_handler.addFilter(ErrorFilter())
 stderr_handler.setFormatter(formatter)
 
+file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+file_handler.setFormatter(formatter)
+
 logger.addHandler(stdout_handler)
 logger.addHandler(stderr_handler)
-
-os.makedirs("data/logs", exist_ok=True)
-file_handler = logging.FileHandler("data/logs/queue.log", encoding="utf-8")
-file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 
 class QueueLogger:
-    """
-    Класс для логирования действий с очередями.
-    Использует стандартную библиотеку logging.
-    """
-
     @classmethod
     def log(
         cls,
@@ -100,35 +95,21 @@ class QueueLogger:
         logger.log(level, action, extra={"chat_title": chat_title, "queue": queue_name, "actor": actor})
 
     @classmethod
-    def joined(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+    def joined(cls, chat_title, queue_name, actor, user_name, position):
         cls.log(chat_title, queue_name, actor, f"join {user_name} ({position})")
 
     @classmethod
-    def leaved(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+    def leaved(cls, chat_title, queue_name, actor, user_name, position):
         cls.log(chat_title, queue_name, actor, f"leave {user_name} ({position})")
 
     @classmethod
-    def inserted(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+    def inserted(cls, chat_title, queue_name, actor, user_name, position):
         cls.log(chat_title, queue_name, actor, f"insert {user_name} ({position})")
 
     @classmethod
-    def removed(cls, chat_title: Optional[str], queue_name: str, actor: str, user_name: str, position: int) -> None:
+    def removed(cls, chat_title, queue_name, actor, user_name, position):
         cls.log(chat_title, queue_name, actor, f"remove {user_name} ({position})")
 
     @classmethod
-    def replaced(
-        cls,
-        chat_title: Optional[str],
-        queue_name: str,
-        actor: str,
-        user_name1: str,
-        pos1: int,
-        user_name2: str,
-        pos2: int,
-    ) -> None:
-        cls.log(
-            chat_title,
-            queue_name,
-            actor,
-            f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})",
-        )
+    def replaced(cls, chat_title, queue_name, actor, user_name1, pos1, user_name2, pos2):
+        cls.log(chat_title, queue_name, actor, f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})")

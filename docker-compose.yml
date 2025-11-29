@@ -1,14 +1,29 @@
+version: "3.9"
+
+docker build -t queuebot -f docker/Dockerfile .
+docker tag queuebot nasru105/queuebot 
+docker push nasru105/queuebot 
 
 services:
   bot:
-    build: .
+    # Build image from local Dockerfile so compose uses current code
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: nasru105/queuebot:latest
     container_name: queuebot
     restart: unless-stopped
     env_file: .env
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app
     depends_on:
       - mongo
+      - loki
+      - promtail
     volumes:
-      - .:/app
+      - ./app:/app/app
+      - /var/log/queuebot:/var/log/queuebot
     networks:
       - internal
 
@@ -27,8 +42,6 @@ services:
     networks:
       - internal
 
-
-  # Опционально: UI для просмотра Mongo
   mongo-express:
     image: mongo-express:1.0
     container_name: queuebot_mongo_express
@@ -44,8 +57,55 @@ services:
     networks:
       - internal
 
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker/promtail/promtail-config.yaml:/etc/promtail/custom-config.yaml
+      - /etc/localtime:/etc/localtime:ro
+      - /var/log/queuebot:/var/log/queuebot:ro
+    command: -config.file=/etc/promtail/custom-config.yaml
+    privileged: true
+    networks:
+      - internal
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/loki/loki-config.yaml:/etc/loki/custom-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/custom-config.yaml
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      - ./docker/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafanadata:/var/lib/grafana
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - loki
+    networks:
+      - internal
+
 volumes:
   mongo_data:
+  loki_data:
+  grafanadata:
 
 networks:
   internal:

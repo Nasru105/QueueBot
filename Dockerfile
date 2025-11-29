@@ -2,10 +2,12 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Копируем весь проект
-COPY . .
+# Ensure Python can find the `app` package placed under /app/app
+ENV PYTHONPATH=/app
+
+COPY requirements.txt ./
+COPY app/ ./app/
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Запуск бота
-ENTRYPOINT ["python", "-m", "app.bot"]
+CMD ["python", "-m", "app.bot"]

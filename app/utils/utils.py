@@ -4,16 +4,19 @@ from typing import List, Optional, Tuple
 
 from telegram import User
 
+from app.queues.models import ActionContext
 from app.services.logger import QueueLogger
 
 
 # Безопасное удаление сообщения.
-async def safe_delete(context, ctx, message_id):
+async def safe_delete(context, ctx: ActionContext, message_id):
     try:
         await context.bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
         QueueLogger.log(
             ctx.chat_title,
+            ctx.queue_name,
+            ctx.actor,
             action=f"Не удалось удалить сообщение {message_id}: {e}",
             level=logging.WARNING,
         )
