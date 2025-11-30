@@ -146,13 +146,12 @@ class QueueFacadeService:
 
     async def generate_queue_name(self, chat_id: int) -> str:
         queues = await self.repo.get_all_queues(chat_id)
-        return self.domain.generate_queue_name(list(queues.keys()))
+        return self.domain.generate_queue_name(queues)
 
     async def get_count_queues(self, chat_id: int) -> int:
         queues = await self.repo.get_all_queues(chat_id)
         return len(queues)
 
-    # user display name proxies
     async def get_user_display_name(self, user, chat_id: int):
         return await self.user_service.get_user_display_name(user, chat_id)
 

@@ -13,9 +13,6 @@ scrape_configs:
     static_configs:
       - targets:
           - localhost
-        labels:
-          job: queuebot
-          __path__: /var/log/queuebot/*.log
     pipeline_stages:
       - json:
           expressions:

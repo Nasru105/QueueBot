@@ -1,6 +1,6 @@
 from telegram.ext import CallbackQueryHandler, CommandHandler
 
-from app.handlers.handlers import error_handler, handle_queue_button, handle_queues_button
+from app.handlers.handlers import handle_queue_button, handle_queues_button
 
 from .admin import (
     delete_all_queues,
@@ -35,7 +35,7 @@ def register_handlers(app):
 
     app.add_handler(CallbackQueryHandler(handle_queue_button, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(handle_queues_button, pattern=r"^queues\|"))
-    app.add_error_handler(error_handler)
+    # app.add_error_handler(error_handler)
 
 
 async def set_commands(app):

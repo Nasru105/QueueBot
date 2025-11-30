@@ -1,8 +1,5 @@
 version: "3.9"
 
-docker build -t queuebot -f docker/Dockerfile .
-docker tag queuebot nasru105/queuebot 
-docker push nasru105/queuebot 
 
 services:
   bot:
@@ -10,7 +7,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: nasru105/queuebot:latest
     container_name: queuebot
     restart: unless-stopped
     env_file: .env

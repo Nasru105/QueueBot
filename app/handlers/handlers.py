@@ -1,6 +1,7 @@
 # app/handlers/queue_handlers.py
 import logging
-import traceback
+
+# import traceback
 from asyncio import Lock
 
 from telegram import Update
@@ -178,15 +179,15 @@ async def delete_queue(ctx: ActionContext, query, context: ContextTypes.DEFAULT_
         await safe_delete(context, ctx, message.message_id)
 
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Глобальный обработчик ошибок.
-    """
-    chat_title = update.effective_chat.title if update and update.effective_chat else "Unknown Chat"
+# async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """
+#     Глобальный обработчик ошибок.
+#     """
+#     chat_title = update.effective_chat.title if update and update.effective_chat else "Unknown Chat"
 
-    error_trace = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
-    QueueLogger.log(
-        chat_title=chat_title,
-        action=f"Exception: {error_trace}",
-        level=logging.ERROR,
-    )
+#     error_trace = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
+#     QueueLogger.log(
+#         chat_title=chat_title,
+#         action=f"Exception: {error_trace}",
+#         level=logging.ERROR,
+#     )

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .models import InsertResult, RemoveResult, ReplaceResult
 
@@ -10,10 +10,9 @@ class QueueDomainService:
     """
 
     @staticmethod
-    def generate_queue_name(existing_names: List[str], base: str = "Очередь") -> str:
+    def generate_queue_name(queues: Dict, base: str = "Очередь") -> str:
         i = 1
-        names_set = set(existing_names)
-        while f"{base} {i}" in names_set:
+        while queues.get(f"{base} {i}", {"queue": []})["queue"]:
             i += 1
         return f"{base} {i}"
 

@@ -65,9 +65,6 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         queue_name = await queue_service.generate_queue_name(chat.id)
 
     ctx.queue_name = queue_name
-    last_id = await queue_service.repo.get_queue_message_id(chat.id, queue_name)
-    if last_id:
-        await safe_delete(context, ctx, last_id)
 
     await queue_service.create_queue(ctx)
     await queue_service.send_queue_message(ctx, context)
