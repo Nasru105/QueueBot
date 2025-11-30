@@ -1,4 +1,4 @@
-from telegram.ext import CallbackQueryHandler, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from app.handlers.handlers import handle_queue_button, handle_queues_button
 
@@ -13,7 +13,7 @@ from .admin import (
 from .queue import chat_nickname, create, global_nickname, queues, start_help
 
 
-def register_handlers(app):
+def register_handlers(app: Application):
     app.add_handler(CommandHandler("start", start_help))
     app.add_handler(CommandHandler("help", start_help))
 
@@ -29,16 +29,12 @@ def register_handlers(app):
     app.add_handler(CommandHandler("replace", replace_users))
     app.add_handler(CommandHandler("rename", rename_queue))
 
-    # app.add_handler(CommandHandler("admin_help", admin_help))
-    # app.add_handler(CommandHandler("generate", generate_queue))
-    # app.add_handler(CommandHandler("getlist", get_list_of_students))
-
     app.add_handler(CallbackQueryHandler(handle_queue_button, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(handle_queues_button, pattern=r"^queues\|"))
     # app.add_error_handler(error_handler)
 
 
-async def set_commands(app):
+async def set_commands(app: Application):
     await app.bot.set_my_commands(
         [
             ("create", "/create [Имя очереди] — создаёт очередь"),

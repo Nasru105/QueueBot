@@ -32,36 +32,6 @@ def admins_only(func):
 
 
 @admins_only
-async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    message_id = update.message.message_id
-    chat_title = chat.title or chat.username or "Личный чат"
-    message_thread_id = update.message.message_thread_id
-    ctx = ActionContext(chat.id, chat_title, thread_id=message_thread_id)
-
-    await safe_delete(context, ctx, message_id)
-
-    text = (
-        "/create [Имя очереди] — создает очередь\n"
-        "/queues — посмотреть активные очереди\n"
-        "/nickname [nickname] — задает отображаемое имя в чате и имеет приоритет над глобальным (без парамеров для сброса)\n"
-        "/nickname_global [nickname] — задает отображаемое всех чатах (без парамеров для сброса)\n\n"
-        "Команды для администраторов:\n"
-        "/delete <Имя очереди> — удалить очередь\n"
-        "/delete_all — удалить все очереди\n"
-        "/insert <Имя очереди> <Имя пользователя> [Позиция] — вставить пользователя на позицию\n"
-        "/remove <Имя очереди> <Имя пользователя или Позиция> — удалить из очереди\n"
-        "/replace <Имя очереди> <Позиция 1> <Позиция 2> — поменять местами\n"
-        "/replace <Имя очереди> <Имя пользователя 1> <Имя пользователя 2> — поменять местами\n"
-        "/rename <Старое имя очереди> <Новое имя очереди> — переименовать очередь\n\n"
-        "/generate <Имя очереди> <A|B> — сгенерировать из списка (перемешать)\n"
-        "/getlist <Имя очереди> <A|B> — просто добавить без перемешивания\n"
-    )
-
-    await context.bot.send_message(chat_id=chat.id, text=text, message_thread_id=message_thread_id)
-
-
-@admins_only
 async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat: Chat = update.effective_chat
     message_id: int = update.message.message_id
@@ -262,7 +232,7 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="Использование: /rename <Старое имя> <Новое имя>",
             message_thread_id=update.message.message_thread_id,
         )
-        create_task(delete_later(context, chat, error.message_id, 10))
+        create_task(delete_later(context, ctx, error.message_id, 10))
         return
 
     queue_names = list((await queue_service.repo.get_all_queues(chat.id)).keys())
@@ -275,7 +245,7 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="Укажите старое и новое имя очереди.",
             message_thread_id=update.message.message_thread_id,
         )
-        create_task(delete_later(context, chat, error.message_id))
+        create_task(delete_later(context, ctx, error.message_id))
         return
 
     if new_name in queue_names:
@@ -284,7 +254,7 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text="Очередь с новым именем уже существует.",
             message_thread_id=update.message.message_thread_id,
         )
-        create_task(delete_later(context, chat, error.message_id))
+        create_task(delete_later(context, ctx, error.message_id))
         return
     ctx.queue_name = old_name
     await queue_service.rename_queue(ctx, new_name)

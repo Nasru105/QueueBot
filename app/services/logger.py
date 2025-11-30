@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -80,6 +81,55 @@ file_handler.setFormatter(formatter)
 logger.addHandler(stdout_handler)
 logger.addHandler(stderr_handler)
 logger.addHandler(file_handler)
+
+# === MongoDB Handler ===
+try:
+    from .mongo_storage import log_collection
+
+    class MongoHandler(logging.Handler):
+        def emit(self, record):
+            try:
+                # Форматируем запись лога как dict
+                log_entry = self.format(record)
+
+                # Преобразуем JSON строку в dict
+                if isinstance(log_entry, str):
+                    log_dict = json.loads(log_entry)
+                else:
+                    log_dict = log_entry
+
+                # Создаем новое событие для асинхронной вставки
+                async def insert_log():
+                    try:
+                        await log_collection.insert_one(log_dict)
+                    except Exception as e:
+                        print(f"Error inserting log to MongoDB: {e}")
+
+                # Запускаем асинхронную задачу
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Если цикл уже запущен, создаем задачу
+                        asyncio.create_task(insert_log())
+                    else:
+                        # Если цикл не запущен, запускаем его
+                        loop.run_until_complete(insert_log())
+                except RuntimeError:
+                    # Если нет event loop, создаем новый
+                    asyncio.run(insert_log())
+
+            except Exception as e:
+                # Логируем ошибку, но не прерываем выполнение
+                print(f"MongoDB logging error: {e}")
+
+    mongo_handler = MongoHandler()
+    mongo_handler.setFormatter(formatter)
+    logger.addHandler(mongo_handler)
+
+except ImportError as e:
+    print(f"MongoDB logging disabled: {e}")
+except Exception as e:
+    print(f"Error initializing MongoDB handler: {e}")
 
 
 class QueueLogger:

@@ -2,6 +2,7 @@
 import asyncio
 import os
 import sys
+from logging import ERROR
 from pathlib import Path
 
 # Фикс импортов при запуске как скрипт
@@ -13,8 +14,8 @@ from dotenv import load_dotenv
 from telegram.ext import Application, ApplicationBuilder
 
 from app.commands import register_handlers, set_commands
-from app.services.logger import logger
-from app.services.mongo_storage import ensure_indexes
+from app.services.logger import QueueLogger, logger
+from app.services.mongo_storage import queue_collection
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -23,11 +24,19 @@ MAX_RETRIES = 3
 RETRY_DELAY = 5
 
 
+async def ensure_indexes():
+    """Создаёт уникальный индекс по chat_id"""
+    try:
+        await queue_collection.create_index("chat_id", unique=True)
+        QueueLogger.log("MongoDB index on 'chat_id' ensured.")
+    except Exception as e:
+        QueueLogger.log(f"Failed to create index: {e}", level=ERROR)
+
+
 async def post_init(application: Application) -> None:
     """Вызывается после инициализации Application, но до старта polling."""
     await set_commands(application)
     await ensure_indexes()
-    logger.info("MongoDB: индексы созданы. Бот готов к работе.")
 
 
 async def run_bot() -> None:
