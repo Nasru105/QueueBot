@@ -14,8 +14,8 @@ services:
       - PYTHONPATH=/app
     depends_on:
       - mongo
-      - loki
-      - promtail
+      # - loki
+      # - promtail
     volumes:
       - ./app:/app/app
       - /var/log/queuebot:/var/log/queuebot

@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 
+from .errors import InvalidPositionError, UserNotFoundError
 from .models import InsertResult, RemoveResult, ReplaceResult
 
 
@@ -35,7 +36,9 @@ class QueueDomainService:
             if 0 <= pos < len(working):
                 removed_name = working.pop(pos)
                 position = pos + 1
-        except Exception:
+            else:
+                raise InvalidPositionError("position out of range")
+        except ValueError:
             # by name
             user_name = " ".join(args).strip()
             if user_name and user_name in working:
@@ -43,6 +46,8 @@ class QueueDomainService:
                 removed_name = user_name
                 position = pos + 1
                 working.remove(user_name)
+            else:
+                raise UserNotFoundError(f"user '{user_name}' not found in queue")
 
         if removed_name is None:
             return RemoveResult(None, None, None)
@@ -63,22 +68,24 @@ class QueueDomainService:
         if desired_pos is None:
             desired_pos = len(queue)
 
+        if desired_pos < 0 or desired_pos > len(queue):
+            raise InvalidPositionError(f"desired position {desired_pos + 1} out of bounds")
+
         old_position = None
         if user_name in queue:
             old_position = queue.index(user_name) + 1
             queue.remove(user_name)
 
-        desired_pos = max(0, min(desired_pos, len(queue)))
         queue.insert(desired_pos, user_name)
         return InsertResult(user_name, desired_pos + 1, queue, old_position)
 
     @staticmethod
     def replace_by_positions(queue: List[str], pos1: int, pos2: int, queue_name: str) -> ReplaceResult:
         if pos1 < 0 or pos2 < 0 or pos1 >= len(queue) or pos2 >= len(queue):
-            raise ValueError("Positions out of range")
+            raise InvalidPositionError("Positions out of range")
 
         if pos1 == pos2:
-            raise ValueError("Positions are equal")
+            raise InvalidPositionError("Positions are equal")
 
         print(queue, pos1, pos2)
 
@@ -90,7 +97,7 @@ class QueueDomainService:
     @staticmethod
     def replace_by_names(queue: List[str], name1: str, name2: str, queue_name: str) -> ReplaceResult:
         if name1 not in queue or name2 not in queue:
-            raise ValueError("One or both names not found")
+            raise UserNotFoundError("One or both names not found")
 
         pos1 = queue.index(name1)
         pos2 = queue.index(name2)

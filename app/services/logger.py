@@ -5,9 +5,10 @@ import os
 import sys
 import time
 from collections import OrderedDict
-from typing import Optional
 
 from pythonjsonlogger import jsonlogger
+
+from app.queues.models import ActionContext
 
 # Устанавливаем часовой пояс Москва
 if os.name != "nt":  # не для Windows
@@ -134,32 +135,25 @@ except Exception as e:
 
 class QueueLogger:
     @classmethod
-    def log(
-        cls,
-        chat_title: Optional[str] = "Unknown Chat",
-        queue_name: str = "Unknown queue",
-        actor: str = "Unknown actor",
-        action: str = "action",
-        level: int = logging.INFO,
-    ) -> None:
-        logger.log(level, action, extra={"chat_title": chat_title, "queue": queue_name, "actor": actor})
+    def log(cls, ctx: ActionContext = ActionContext(), action: str = "action", level: int = logging.INFO) -> None:
+        logger.log(level, action, extra={"chat_title": ctx.chat_title, "queue": ctx.queue_name, "actor": ctx.actor})
 
     @classmethod
-    def joined(cls, chat_title, queue_name, actor, user_name, position):
-        cls.log(chat_title, queue_name, actor, f"join {user_name} ({position})")
+    def joined(cls, ctx: ActionContext, user_name, position):
+        cls.log(ctx, f"join {user_name} ({position})")
 
     @classmethod
-    def leaved(cls, chat_title, queue_name, actor, user_name, position):
-        cls.log(chat_title, queue_name, actor, f"leave {user_name} ({position})")
+    def leaved(cls, ctx: ActionContext, user_name, position):
+        cls.log(ctx, f"leave {user_name} ({position})")
 
     @classmethod
-    def inserted(cls, chat_title, queue_name, actor, user_name, position):
-        cls.log(chat_title, queue_name, actor, f"insert {user_name} ({position})")
+    def inserted(cls, ctx: ActionContext, user_name, position):
+        cls.log(ctx, f"insert {user_name} ({position})")
 
     @classmethod
-    def removed(cls, chat_title, queue_name, actor, user_name, position):
-        cls.log(chat_title, queue_name, actor, f"remove {user_name} ({position})")
+    def removed(cls, ctx: ActionContext, user_name, position):
+        cls.log(ctx, f"remove {user_name} ({position})")
 
     @classmethod
-    def replaced(cls, chat_title, queue_name, actor, user_name1, pos1, user_name2, pos2):
-        cls.log(chat_title, queue_name, actor, f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})")
+    def replaced(cls, ctx: ActionContext, user_name1, pos1, user_name2, pos2):
+        cls.log(ctx, f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})")

@@ -13,13 +13,7 @@ async def safe_delete(context, ctx: ActionContext, message_id):
     try:
         await context.bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
-        QueueLogger.log(
-            ctx.chat_title,
-            ctx.queue_name,
-            ctx.actor,
-            action=f"Не удалось удалить сообщение {message_id}: {e}",
-            level=logging.WARNING,
-        )
+        QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
 
 
 def strip_user_full_name(user: User) -> str:

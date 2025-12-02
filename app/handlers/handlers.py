@@ -44,22 +44,23 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_name = await queue_service.get_user_display_name(user, chat.id)
     actor = user.username or "Unknown"
     thread_id = query.message.message_thread_id if query.message else None
+    ctx = ActionContext(chat.id, chat_title, "", actor, thread_id)
 
     # Безопасное получение данных из callback
     try:
         _, queue_index_str, action = query.data.split("|")
         queue_index = int(queue_index_str)
     except ValueError:
-        QueueLogger.log(chat_title, action="Invalid callback data", level=logging.WARNING)
+        QueueLogger.log(ctx, action="Invalid callback data", level=logging.WARNING)
         return
 
     queues = await queue_service.repo.get_all_queues(chat.id)
     if not (0 <= queue_index < len(queues)):
-        QueueLogger.log(chat_title, action="Invalid queue index", level=logging.WARNING)
+        QueueLogger.log(ctx, action="Invalid queue index", level=logging.WARNING)
         return
 
     queue_name = list(queues.keys())[queue_index]
-    ctx = ActionContext(chat.id, chat_title, queue_name, actor, thread_id)
+    ctx.queue_name = queue_name
 
     async with get_chat_lock(chat.id):
         current_queue = await queue_service.repo.get_queue(chat.id, queue_name)
@@ -91,7 +92,7 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         _, queue_index_str, action = query.data.split("|")
     except ValueError:
-        QueueLogger.log(chat_title, action="Invalid callback data", level=logging.WARNING)
+        QueueLogger.log(ctx, action="Invalid callback data", level=logging.WARNING)
         return
 
     if action == "hide":
@@ -109,11 +110,11 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
         try:
             queue_index = int(queue_index_str)
             if not (0 <= queue_index < len(queues)):
-                QueueLogger.log(chat_title, action="Invalid queue index", level=logging.WARNING)
+                QueueLogger.log(ctx, action="Invalid queue index", level=logging.WARNING)
                 return
             queue_name = list(queues.keys())[queue_index]
         except ValueError:
-            QueueLogger.log(chat_title, action="Invalid queue index format", level=logging.WARNING)
+            QueueLogger.log(ctx, action="Invalid queue index format", level=logging.WARNING)
             return
     ctx.queue_name = queue_name
 

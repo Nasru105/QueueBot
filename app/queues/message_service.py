@@ -9,6 +9,8 @@ from app.queues.presenter import QueuePresenter
 from app.services.logger import QueueLogger
 from app.utils.utils import safe_delete
 
+from .errors import MessageServiceError
+
 
 class QueueMessageService:
     """
@@ -25,19 +27,29 @@ class QueueMessageService:
         Отправить сообщение о очереди: при наличии старого — удалить.
         Сохраняет message_id в repo.
         """
-        last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
-        if last_id:
-            await safe_delete(context, ctx, last_id)
+        try:
+            last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
+            if last_id:
+                await safe_delete(context, ctx, last_id)
 
-        sent = await context.bot.send_message(
-            chat_id=ctx.chat_id,
-            text=text,
-            parse_mode="MarkdownV2",
-            reply_markup=keyboard,
-            message_thread_id=ctx.thread_id,
-        )
-        await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
-        return sent.message_id
+            sent = await context.bot.send_message(
+                chat_id=ctx.chat_id,
+                text=text,
+                parse_mode="MarkdownV2",
+                reply_markup=keyboard,
+                message_thread_id=ctx.thread_id,
+            )
+            await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
+            return sent.message_id
+        except Exception as ex:
+            self.logger.log(
+                ctx.chat_title,
+                ctx.queue_name,
+                ctx.actor,
+                f"send failed: {type(ex).__name__}: {ex}",
+                level=logging.ERROR,
+            )
+            raise MessageServiceError(ex)
 
     async def edit_queue_message(
         self, ctx, text: str, keyboard, query_or_update=None, context: Optional[ContextTypes.DEFAULT_TYPE] = None
@@ -76,7 +88,7 @@ class QueueMessageService:
             self.logger.log(
                 ctx.chat_title, ctx.queue_name, ctx.actor, f"edit failed (BadRequest): {e}", level=logging.ERROR
             )
-            raise
+            raise MessageServiceError(e)
         except Exception as ex:
             # log and fallback to sending new message (if bot context available)
             self.logger.log(ctx.chat_title, ctx.queue_name, ctx.actor, f"edit failed: {ex}", level=logging.ERROR)
@@ -89,7 +101,7 @@ class QueueMessageService:
                 )
                 await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
                 return sent.message_id
-            raise
+            raise MessageServiceError(ex)
 
         if msg_id is not None:
             await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, msg_id)
@@ -119,8 +131,9 @@ class QueueMessageService:
                 if "not modified" in str(e).lower():
                     continue
                 else:
-                    raise
+                    raise MessageServiceError(e)
             except Exception as ex:
+                # Log per-queue failures and continue
                 self.logger.log(
                     ctx.chat_title,
                     queue_name,
