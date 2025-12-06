@@ -8,12 +8,7 @@ from app.services.logger import QueueLogger
 from app.utils.utils import parse_users_names
 
 from .domain import QueueDomainService
-from .errors import (
-    InvalidPositionError,
-    QueueError,
-    QueueNotFoundError,
-    UserNotFoundError,
-)
+from .errors import InvalidPositionError, QueueError, QueueNotFoundError, UserNotFoundError
 from .message_service import QueueMessageService
 from .models import ActionContext, InsertResult, RemoveResult, ReplaceResult
 from .presenter import QueuePresenter
@@ -73,7 +68,7 @@ class QueueFacadeService:
         try:
             queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_name)
         except QueueError as ex:
-            self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.ERROR)
+            self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return RemoveResult(None, None, None)
 
         if queue is None:

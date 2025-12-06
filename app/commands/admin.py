@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 
 from app.queues import queue_service
 from app.queues.models import ActionContext
+from app.services.mongo_storage import log_collection
 from app.utils.utils import delete_later, parse_queue_args, safe_delete
 
 
@@ -262,3 +263,72 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Обновляем сообщение для новой очереди
     await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
+
+
+@admins_only
+async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    MAX_LEN = 4000  # чуть меньше лимита 4096
+
+    def format_log(log: dict) -> str:
+        lines = []
+        lines.append(f"📄 {log.get('asctime', '?')}")
+        lines.append(f"🔹 {log.get('message', '')}")
+
+        chat_title = log.get("chat_title")
+        queue = log.get("queue")
+        actor = log.get("actor")
+
+        info_line = []
+        if chat_title:
+            info_line.append(chat_title)
+        if queue:
+            info_line.append(queue)
+
+        if info_line:
+            lines.append("🏷️ " + " | ".join(info_line))
+
+        if actor:
+            lines.append(f"👤 {actor}")
+
+        return "\n".join(lines)
+
+    def split_text(text: str, max_len: int = MAX_LEN) -> list[str]:
+        """Разбивает текст на части, чтобы не превышать лимит Telegram."""
+        parts = []
+        while len(text) > max_len:
+            cut = text.rfind("\n──────────────\n", 0, max_len)  # разрезать по логам
+            if cut == -1:
+                cut = max_len
+            parts.append(text[:cut])
+            text = text[cut:]
+        parts.append(text)
+        return parts
+
+    chat: Chat = update.effective_chat
+    message_id: int = update.message.message_id
+    chat_title = chat.title or chat.username or "Личный чат"
+    message_thread_id = update.message.message_thread_id if update.message else None
+    user = update.effective_user
+    actor = user.username or "Unknown"
+    ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
+
+    await safe_delete(context, ctx, message_id)
+
+    args = context.args
+    try:
+        count = int(args[-1])
+    except Exception:
+        count = 10
+
+    cursor = log_collection.find().sort("_id", -1).limit(count)
+    logs = await cursor.to_list(length=count)
+
+    formatted = "\n──────────────\n".join(format_log(log) for log in logs)
+
+    # 🔥 Разбиваем на части
+    parts = split_text(formatted)
+
+    # 📨 Отправляем по очереди
+    for part in parts:
+        msg = await context.bot.send_message(chat.id, part or "Логи пусты.", message_thread_id=message_thread_id)
+        create_task(delete_later(context, ctx, msg.message_id, 60))
