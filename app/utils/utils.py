@@ -1,11 +1,37 @@
 import asyncio
 import logging
+from functools import wraps
 from typing import List, Optional, Tuple
 
-from telegram import User
+from telegram import Chat, Update, User
+from telegram.ext import ContextTypes
 
 from app.queues.models import ActionContext
 from app.services.logger import QueueLogger
+
+
+def with_ctx(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        chat: Chat = update.effective_chat
+        user = update.effective_user
+
+        ctx = ActionContext(
+            chat_id=chat.id,
+            chat_title=chat.title or chat.username or "Личный чат",
+            queue_name="",
+            actor=user.username or "Unknown",
+            thread_id=update.message.message_thread_id if update.message else None,
+        )
+
+        if update.message:
+            message_id: int = update.message.message_id
+            await safe_delete(context, ctx, message_id)
+
+        kwargs["ctx"] = ctx
+        return await func(update, context, *args, **kwargs)
+
+    return wrapper
 
 
 # Безопасное удаление сообщения.
@@ -73,3 +99,11 @@ def parse_users_names(args: List[str], queue: List[str]) -> Tuple[Optional[str],
             return name1, name2
 
     return None, None
+
+
+async def is_user_admin(context, chat_id, user_id) -> bool:
+    try:
+        member = await context.bot.get_chat_member(chat_id, user_id)
+        return member.status in ("administrator", "creator")
+    except Exception:
+        return False

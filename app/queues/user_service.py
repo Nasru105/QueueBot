@@ -40,3 +40,4 @@ class UserService:
         else:
             user_doc["display_names"].pop(chat_str, None)
         await self.repo.update_user_display_name(user.id, user_doc["display_names"])
+        return user_doc["display_names"]["global"]

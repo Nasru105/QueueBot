@@ -235,8 +235,9 @@ class QueueFacadeService:
 
     async def clear_user_display_name(self, ctx, user, global_mode=False):
         try:
-            await self.user_service.clear_user_display_name(ctx, user, global_mode)
+            user_display_name = await self.user_service.clear_user_display_name(ctx, user, global_mode)
             self.logger.log(ctx, "clear display name")
+            return user_display_name
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 

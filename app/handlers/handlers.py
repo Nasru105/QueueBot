@@ -2,7 +2,7 @@
 import logging
 
 # import traceback
-from asyncio import Lock
+from asyncio import Lock, create_task
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -11,7 +11,7 @@ from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.services.logger import QueueLogger
 from app.utils.InlineKeyboards import queues_keyboard
-from app.utils.utils import safe_delete
+from app.utils.utils import delete_later, is_user_admin, safe_delete, with_ctx
 
 # Локи на чат
 chat_locks: dict[int, Lock] = {}
@@ -23,15 +23,8 @@ def get_chat_lock(chat_id: int) -> Lock:
     return chat_locks[chat_id]
 
 
-async def is_user_admin(chat_id, user_id, context) -> bool:
-    try:
-        member = await context.bot.get_chat_member(chat_id, user_id)
-        return member.status in ("administrator", "creator")
-    except Exception:
-        return False
-
-
-async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@with_ctx
+async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     """
     Обрабатывает нажатие кнопок внутри конкретной очереди (join/leave).
     """
@@ -39,12 +32,7 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     user = query.from_user
-    chat = query.message.chat
-    chat_title = chat.title or chat.username or "Личный чат"
-    user_name = await queue_service.get_user_display_name(user, chat.id)
-    actor = user.username or "Unknown"
-    thread_id = query.message.message_thread_id if query.message else None
-    ctx = ActionContext(chat.id, chat_title, "", actor, thread_id)
+    user_name = await queue_service.get_user_display_name(user, ctx.chat_id)
 
     # Безопасное получение данных из callback
     try:
@@ -54,7 +42,7 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         QueueLogger.log(ctx, action="Invalid callback data", level=logging.WARNING)
         return
 
-    queues = await queue_service.repo.get_all_queues(chat.id)
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     if not (0 <= queue_index < len(queues)):
         QueueLogger.log(ctx, action="Invalid queue index", level=logging.WARNING)
         return
@@ -62,8 +50,8 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     queue_name = list(queues.keys())[queue_index]
     ctx.queue_name = queue_name
 
-    async with get_chat_lock(chat.id):
-        current_queue = await queue_service.repo.get_queue(chat.id, queue_name)
+    async with get_chat_lock(ctx.chat_id):
+        current_queue = await queue_service.repo.get_queue(ctx.chat_id, queue_name)
         if action == "join" and user_name not in current_queue:
             await queue_service.join_to_queue(ctx, user_name)
         elif action == "leave" and user_name in current_queue:
@@ -74,7 +62,8 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     await queue_service.update_queue_message(ctx, query_or_update=query, context=context)
 
 
-async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@with_ctx
+async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     """
     Обрабатывает нажатие кнопок списка всех очередей (get/delete/hide).
     """
@@ -83,11 +72,6 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     user_id = query.from_user.id
     chat = query.message.chat
-    chat_title = chat.title or chat.username or "Личный чат"
-    actor = query.from_user.username or "Unknown"
-    thread_id = query.message.message_thread_id if query.message else None
-
-    ctx = ActionContext(chat.id, chat_title, "", actor, thread_id)
 
     try:
         _, queue_index_str, action = query.data.split("|")
@@ -96,13 +80,13 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if action == "hide":
-        last_queues_id = await queue_service.repo.get_list_message_id(chat.id)
+        last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
         if last_queues_id:
             await safe_delete(context, ctx, last_queues_id)
-            await queue_service.repo.clear_list_message_id(chat.id)
+            await queue_service.repo.clear_list_message_id(ctx.chat_id)
         return
 
-    queues = await queue_service.repo.get_all_queues(chat.id)
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
 
     if queue_index_str == "all":
         queue_name = None
@@ -124,18 +108,24 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Удалить все очереди
     elif action == "delete" and queue_index_str == "all":
-        if chat.title and not await is_user_admin(chat.id, user_id, context):
-            await query.answer("Только админы могут удалять все очереди!", show_alert=True)
+        if chat.title and not await is_user_admin(context, ctx.chat_id, user_id):
+            error_message = await context.bot.send_message(
+                ctx.chat_id, "Вы не являетесь администратором", message_thread_id=ctx.thread_id
+            )
+            create_task(delete_later(context, ctx, error_message.message_id))
             return
-        async with get_chat_lock(chat.id):
+        async with get_chat_lock(ctx.chat_id):
             await delete_all_queues(ctx, context)
 
     # Удалить конкретную очередь
     elif action == "delete" and queue_name:
-        if chat.title and not await is_user_admin(chat, user_id, context):
-            await query.answer("Только админы могут удалять очереди!", show_alert=True)
+        if chat.title and not await is_user_admin(context, ctx.chat_id, user_id):
+            error_message = await context.bot.send_message(
+                ctx.chat_id, "Вы не являетесь администратором", message_thread_id=ctx.thread_id
+            )
+            create_task(delete_later(context, ctx, error_message.message_id))
             return
-        async with get_chat_lock(chat.id):
+        async with get_chat_lock(ctx.chat_id):
             await delete_queue(ctx, query, context)
 
 
@@ -180,11 +170,11 @@ async def delete_queue(ctx: ActionContext, query, context: ContextTypes.DEFAULT_
         await safe_delete(context, ctx, message.message_id)
 
 
-# async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
 #     """
 #     Глобальный обработчик ошибок.
 #     """
-#     chat_title = update.effective_chat.title if update and update.effective_chat else "Unknown Chat"
+#     chat_title = update.effective_ctx.chat_title if update and update.effective_chat else "Unknown Chat"
 
 #     error_trace = "".join(traceback.format_exception(None, context.error, context.error.__traceback__))
 #     QueueLogger.log(

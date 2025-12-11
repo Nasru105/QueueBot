@@ -1,28 +1,19 @@
 from asyncio import create_task
 
-from telegram import Chat, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.utils.InlineKeyboards import queues_keyboard
-from app.utils.utils import delete_later, safe_delete
+from app.utils.utils import delete_later, safe_delete, with_ctx
 
 
-async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+@with_ctx
+async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Показывает справку по командам.
     """
-    chat: Chat = update.effective_chat
-    message_id = update.message.message_id
-    message_thread_id = update.message.message_thread_id
-    chat_title = chat.title or chat.username or "Личный чат"
-
-    ctx = ActionContext(
-        chat.id, chat_title, queue_name=None, actor=update.effective_user.username, thread_id=message_thread_id
-    )
-
-    await safe_delete(context, ctx, message_id)
 
     text = (
         "/create [Имя очереди] — создает очередь\n"
@@ -39,30 +30,21 @@ async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         "/rename <Старое имя очереди> <Новое имя очереди> — переименовать очередь\n\n"
     )
 
-    await context.bot.send_message(chat_id=chat.id, text=text, message_thread_id=message_thread_id)
+    await context.bot.send_message(chat_id=ctx.chat_id, text=text, message_thread_id=ctx.thread_id)
 
 
-async def create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+@with_ctx
+async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Создаёт новую очередь.
     Имя: из аргументов или автогенерация.
     """
-    chat: Chat = update.effective_chat
-    message_id: int = update.message.message_id
-    chat_title = chat.title or chat.username or "Личный чат"
-    message_thread_id = update.message.message_thread_id if update.message else None
-    user = update.effective_user
-    actor = user.username or "Unknown"
-    ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
-
-    # Удаляем команду
-    await safe_delete(context, ctx, message_id)
 
     # Определяем имя очереди
     if context.args:
         queue_name = " ".join(context.args)
     else:
-        queue_name = await queue_service.generate_queue_name(chat.id)
+        queue_name = await queue_service.generate_queue_name(ctx.chat_id)
 
     ctx.queue_name = queue_name
 
@@ -70,79 +52,61 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await queue_service.send_queue_message(ctx, context)
 
 
-async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+@with_ctx
+async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Показывает меню со всеми очередями.
     Если нет — временное сообщение.
     """
-    chat: Chat = update.effective_chat
-    message_id: int = update.message.message_id
-    chat_title = chat.title or chat.username or "Личный чат"
-    message_thread_id = update.message.message_thread_id if update.message else None
-    user = update.effective_user
-    actor = user.username or "Unknown"
-    ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
-
-    # Удаляем команду
-    await safe_delete(context, ctx, message_id)
 
     # Удаляем старое меню
-    last_queues_id = await queue_service.repo.get_list_message_id(chat.id)
+    last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_queues_id:
         await safe_delete(context, ctx, last_queues_id)
 
     # Получаем очереди
-    queues_dict = await queue_service.repo.get_all_queues(chat.id)
+    queues_dict = await queue_service.repo.get_all_queues(ctx.chat_id)
     queue_names = list(queues_dict.keys())
 
     if queue_names:
         sent = await context.bot.send_message(
-            chat_id=chat.id,
+            chat_id=ctx.chat_id,
             text="Выберите очередь:",
             reply_markup=await queues_keyboard(queue_names),
-            message_thread_id=message_thread_id,
+            message_thread_id=ctx.thread_id,
         )
-        await queue_service.repo.set_list_message_id(chat.id, sent.message_id)
+        await queue_service.repo.set_list_message_id(ctx.chat_id, sent.message_id)
     else:
         sent = await context.bot.send_message(
-            chat_id=chat.id,
-            text="Нет активных очередей",
-            message_thread_id=message_thread_id,
+            chat_id=ctx.chat_id, text="Нет активных очередей", message_thread_id=ctx.thread_id
         )
-        await queue_service.repo.clear_list_message_id(chat.id)
+        await queue_service.repo.clear_list_message_id(ctx.chat_id)
         create_task(delete_later(context, ctx, sent.message_id, 10))
 
 
-async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, global_mode=False) -> None:
+@with_ctx
+async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext, global_mode=False) -> None:
     """Устанавливает отображаемое имя пользователя в очередях."""
-    chat: Chat = update.effective_chat
-    message_id: int = update.message.message_id
-    chat_title = chat.title or chat.username or "Личный чат"
-    message_thread_id = update.message.message_thread_id if update.message else None
     user = update.effective_user
-    actor = user.username or "Unknown"
-    ctx = ActionContext(chat.id, chat_title, "", actor, message_thread_id)
-
-    await safe_delete(context, ctx, message_id)
     args = context.args
-    nickname = " ".join(args) if args else None
+    user_display_name = " ".join(args) if args else None
 
-    if nickname:
-        await queue_service.set_user_display_name(ctx, user, nickname, global_mode)
+    if user_display_name:
+        await queue_service.set_user_display_name(ctx, user, user_display_name, global_mode)
         response = (
-            f"Установлено глобальное отображаемое имя для пользователя {user.username}: {nickname}"
+            f"Установлено глобальное отображаемое имя для пользователя {user.username}: {user_display_name}"
             if global_mode
-            else f"Установлено отображаемое имя для пользователя {user.username}: {nickname} в чате {chat_title}"
+            else f"Установлено отображаемое имя для пользователя {user.username}: {user_display_name} в чате {ctx.chat_title}"
         )
     else:
-        await queue_service.clear_user_display_name(ctx, user, global_mode)
+        user_display_name = await queue_service.clear_user_display_name(ctx, user, global_mode)
         response = (
-            "Сброшено глобальное отображаемое имя на стандартное"
+            f"Сброшено глобальное отображаемое имя на стандартное ({user_display_name})"
             if global_mode
-            else f"Сброшено отображаемое имя для {chat_title} на стандартное"
+            else f"Сброшено отображаемое имя для {ctx.chat_title} на глобальное ({user_display_name})"
         )
 
-    response_message = await context.bot.send_message(chat.id, response, message_thread_id=message_thread_id)
+    response_message = await context.bot.send_message(ctx.chat_id, response, message_thread_id=ctx.thread_id)
     create_task(delete_later(context, ctx, response_message.message_id))
 
 
