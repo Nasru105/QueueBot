@@ -10,7 +10,6 @@ from telegram.ext import ContextTypes
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.services.logger import QueueLogger
-from app.utils.InlineKeyboards import queues_keyboard
 from app.utils.utils import delete_later, is_user_admin, safe_delete, with_ctx
 
 # Локи на чат
@@ -82,7 +81,7 @@ async def handle_queues_button(update: Update, context: ContextTypes.DEFAULT_TYP
     if action == "hide":
         last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
         if last_queues_id:
-            await safe_delete(context, ctx, last_queues_id)
+            await safe_delete(context.bot, ctx, last_queues_id)
             await queue_service.repo.clear_list_message_id(ctx.chat_id)
         return
 
@@ -137,7 +136,7 @@ async def delete_all_queues(ctx: ActionContext, context: ContextTypes.DEFAULT_TY
     # Удаляем меню очередей
     last_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_id:
-        await safe_delete(context, ctx, last_id)
+        await safe_delete(context.bot, ctx, last_id)
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     for queue_name in list(queues.keys()):
@@ -145,7 +144,7 @@ async def delete_all_queues(ctx: ActionContext, context: ContextTypes.DEFAULT_TY
 
         last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, queue_name)
         if last_id:
-            await safe_delete(context, ctx, last_id)
+            await safe_delete(context.bot, ctx, last_id)
         await queue_service.delete_queue(ctx)
 
 
@@ -155,19 +154,12 @@ async def delete_queue(ctx: ActionContext, query, context: ContextTypes.DEFAULT_
     # Удаляем сообщение очереди
     last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
     if last_id:
-        await safe_delete(context, ctx, last_id)
+        await safe_delete(context.bot, ctx, last_id)
 
     await queue_service.delete_queue(ctx)
 
     # Обновляем меню очередей
-    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    await queue_service.mass_update_existing_queues(context.bot, ctx)
-
-    if queues:
-        new_keyboard = await queues_keyboard(list(queues.keys()))
-        await message.edit_reply_markup(reply_markup=new_keyboard)
-    else:
-        await safe_delete(context, ctx, message.message_id)
+    await queue_service.mass_update_existing_queues(context.bot, ctx, message.message_id)
 
 
 # async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):

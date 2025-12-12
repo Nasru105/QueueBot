@@ -1,0 +1,96 @@
+from asyncio import create_task
+from datetime import timedelta, timezone
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from app.commands.admin import admins_only
+from app.queues.models import ActionContext
+from app.services.mongo_storage import log_collection
+from app.utils.utils import delete_later, safe_delete, with_ctx
+
+MAX_LEN = 4000  # чуть меньше лимита 4096
+
+
+def split_text(text: str, max_len: int = MAX_LEN) -> list[str]:
+    """Разбивает текст на части, чтобы не превышать лимит Telegram."""
+    parts = []
+    while len(text) > max_len:
+        cut = text.rfind("\n──────────────\n", 0, max_len)  # разрезать по логам
+        if cut == -1:
+            cut = max_len
+        parts.append(text[:cut])
+        text = text[cut:]
+    parts.append(text)
+    return parts
+
+
+@with_ctx
+@admins_only
+async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    def format_log(log: dict) -> str:
+        lines = []
+        lines.append(f"📄 {log.get('asctime', '?')}")
+        lines.append(f"🔹 {log.get('message', '')}")
+
+        chat_title = log.get("chat_title")
+        queue = log.get("queue")
+        actor = log.get("actor")
+
+        info_line = []
+        if chat_title:
+            info_line.append(chat_title)
+        if queue:
+            info_line.append(queue)
+
+        if info_line:
+            lines.append("🏷️ " + " | ".join(info_line))
+
+        if actor:
+            lines.append(f"👤 {actor}")
+
+        return "\n".join(lines)
+
+    message_id: int = update.message.message_id
+
+    await safe_delete(context.bot, ctx, message_id)
+
+    args = context.args
+    try:
+        count = int(args[-1])
+    except Exception:
+        count = 10
+
+    cursor = log_collection.find().sort("_id", -1).limit(count)
+    logs = await cursor.to_list(length=count)
+
+    formatted = "\n──────────────\n".join(format_log(log) for log in logs)
+
+    # 🔥 Разбиваем на части
+    parts = split_text(formatted)
+
+    # 📨 Отправляем по очереди
+    for part in parts:
+        msg = await context.bot.send_message(ctx.chat_id, part or "Логи пусты.", message_thread_id=ctx.thread_id)
+        create_task(delete_later(context, ctx, msg.message_id, 60))
+
+
+@with_ctx
+@admins_only
+async def get_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    jobs = context.job_queue.jobs()
+
+    MSK = timezone(timedelta(hours=3))
+
+    text = "Активные задачи:\n\n"
+    for job in jobs:
+        local_time = job.next_t.astimezone(MSK).strftime("%d.%m.%Y %H:%M:%S")
+        text += f"• {job.name}\n  next MSK: {local_time}\n\n"
+
+    # 🔥 Разбиваем на части
+    parts = split_text(text)
+
+    # 📨 Отправляем по очереди
+    for part in parts:
+        msg = await context.bot.send_message(ctx.chat_id, part or "jobs пусты.", message_thread_id=ctx.thread_id)
+        create_task(delete_later(context, ctx, msg.message_id, 60))

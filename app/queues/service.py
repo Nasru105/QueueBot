@@ -5,7 +5,8 @@ from telegram.ext import ContextTypes
 
 from app.queues.queue_repository import QueueRepository
 from app.services.logger import QueueLogger
-from app.utils.utils import parse_users_names
+from app.utils.InlineKeyboards import queues_keyboard
+from app.utils.utils import parse_users_names, safe_delete
 
 from .domain import QueueDomainService
 from .errors import InvalidPositionError, QueueError, QueueNotFoundError, UserNotFoundError
@@ -34,13 +35,16 @@ class QueueFacadeService:
         try:
             await self.repo.create_queue(ctx.chat_id, ctx.chat_title, ctx.queue_name)
             self.logger.log(ctx, "create queue")
+            return ctx.queue_name
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            return
 
     async def delete_queue(self, ctx: ActionContext):
         try:
             await self.repo.delete_queue(ctx.chat_id, ctx.queue_name)
             self.logger.log(ctx, "delete queue")
+
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
@@ -241,11 +245,18 @@ class QueueFacadeService:
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def mass_update_existing_queues(self, bot, ctx):
+    async def mass_update_existing_queues(self, bot, ctx, message_list_id):
         queues = await self.repo.get_all_queues(ctx.chat_id)
+
         if not queues:
-            return
+            await safe_delete(bot, ctx, message_list_id)
         try:
             await self.message_service.mass_update(bot, ctx, queues, self.presenter)
+            if message_list_id:
+                new_keyboard = await queues_keyboard(list(queues.keys()))
+                await bot.edit_message_reply_markup(
+                    chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
+                )
+
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)

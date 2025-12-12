@@ -3,22 +3,23 @@ from asyncio import create_task
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from app.handlers.scheduler import schedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.utils.InlineKeyboards import queues_keyboard
-from app.utils.utils import delete_later, safe_delete, with_ctx
+from app.utils.utils import delete_later, parse_flags_args, safe_delete, with_ctx
 
 
 @with_ctx
-async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
+async def help_commands(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Показывает справку по командам.
     """
 
     text = (
-        "/create [Имя очереди] — создает очередь\n"
+        "/create [Имя очереди] [-h часы] — создает очередь\n"
         "/queues — посмотреть активные очереди\n"
-        "/nickname [nickname] — задает отображаемое имя в текущем чате и имеет приоритет над глобальным (без парамеров для сброса)\n"
+        "/nickname [nickname] — задает отображаемое имя в текущем чате и  (без парамеров для сброса)\n"
         "/nickname_global [nickname] — задает отображаемое имя для всех чатах (без парамеров для сброса)\n\n"
         "Команды для администраторов:\n"
         "/delete <Имя очереди> — удалить очередь\n"
@@ -34,22 +35,73 @@ async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Ac
 
 
 @with_ctx
+async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
+    """
+    Показывает справку по командам.
+    """
+
+    text = (
+        "*Справка по командам QueueBot*\n\n"
+        "*Создание очереди:*\n"
+        "/create Название [\\-h часы]\n"
+        "• Параметр \\-h задаёт срок жизни очереди в часах\\.\n"
+        "• Если не указать \\-h, очередь живёт 24 часа\\.\n"
+        "• Срок жизни продлевается на 1 час после последнего обновления очереди\\.\n\n"
+        "Примеры:\n"
+        "• /create Очередь 3\n"
+        "• /create Дежурство \\-h 12\n"
+        "• /create Очередь 4 \\-h 48\n\n"
+        "*Просмотр активных очередей:*\n"
+        "/queues — показывает все активные очереди в чате\\.\n\n"
+        "*Управление отображаемым именем:*\n"
+        "/nickname [nickname] — задаёт имя в текущем чате\\. Имеет приоритет над глобальным\\. Без параметров — сброс\\.\n"
+        "/nickname_global [nickname] — задаёт имя во всех чатах\\. Без параметров — сброс\\.\n\n"
+        "*Команды для администраторов:*\n"
+        "/delete \\<Имя очереди\\> — удалить очередь\\.\n"
+        "/delete_all — удалить все очереди\\.\n"
+        "/insert \\<Очередь\\> \\<Пользователь\\> [Позиция] — вставить пользователя на позицию\\.\n"
+        "/remove \\<Очередь\\> \\<Пользователь или Позиция\\> — удалить пользователя из очереди\\.\n"
+        "/replace \\<Очередь\\> \\<Позиция 1\\> \\<Позиция 2\\> — поменять местами позиции\\.\n"
+        "/replace \\<Очередь\\> \\<Пользователь 1\\> \\<Пользователь 2\\> — поменять местами пользователей\\.\n"
+        "/rename \\<Старое имя очереди\\> \\<Новое имя очереди\\> — переименовать очередь\\.\n"
+    )
+
+    await context.bot.send_message(
+        chat_id=ctx.chat_id, text=text, message_thread_id=ctx.thread_id, parse_mode="MarkdownV2"
+    )
+
+
+@with_ctx
 async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Создаёт новую очередь.
     Имя: из аргументов или автогенерация.
     """
 
+    flags = {"-h": None}
+
+    args_parts, parsed_flags = parse_flags_args(context.args, flags)
+
     # Определяем имя очереди
-    if context.args:
-        queue_name = " ".join(context.args)
+    if args_parts:
+        queue_name = " ".join(args_parts)
     else:
         queue_name = await queue_service.generate_queue_name(ctx.chat_id)
 
     ctx.queue_name = queue_name
 
-    await queue_service.create_queue(ctx)
-    await queue_service.send_queue_message(ctx, context)
+    queue_name = await queue_service.create_queue(ctx)
+    if queue_name:
+        await queue_service.send_queue_message(ctx, context)
+        await schedule_queue_expiration(context, ctx, int(parsed_flags["-h"]) * 3600 if parsed_flags["-h"] else 86400)
+    else:
+        sent = await context.bot.send_message(
+            chat_id=ctx.chat_id,
+            text=f"Очередь с именем {ctx.queue_name} уже существет",
+            message_thread_id=ctx.thread_id,
+        )
+        await queue_service.repo.clear_list_message_id(ctx.chat_id)
+        create_task(delete_later(context, ctx, sent.message_id, 3))
 
 
 @with_ctx
@@ -62,7 +114,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     # Удаляем старое меню
     last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_queues_id:
-        await safe_delete(context, ctx, last_queues_id)
+        await safe_delete(context.bot, ctx, last_queues_id)
 
     # Получаем очереди
     queues_dict = await queue_service.repo.get_all_queues(ctx.chat_id)

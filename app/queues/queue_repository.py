@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from telegram import User
 
 from app.services.mongo_storage import queue_collection, user_collection
-from app.utils.utils import strip_user_full_name
+from app.utils.utils import get_now_formatted_time, strip_user_full_name
 
 from .errors import (
     ChatNotFoundError,
@@ -61,6 +61,8 @@ class QueueRepository:
             raise UserAlreadyExistsError(f"{user_name} already in queue")
 
         queue_list.append(user_name)
+
+        doc["queues"][queue_idx]["last_modified"] = await get_now_formatted_time()
         await self.update_chat(chat_id, {"queues": doc["queues"]})
         return len(queue_list)
 
@@ -84,6 +86,7 @@ class QueueRepository:
 
         position = queue_list.index(user_name) + 1
         queue_list.remove(user_name)
+        doc["queues"][queue_idx]["last_modified"] = await get_now_formatted_time()
         await self.update_chat(chat_id, {"queues": doc["queues"]})
         return position
 
@@ -98,7 +101,13 @@ class QueueRepository:
             raise QueueAlreadyExistsError(f"queue '{queue_name}' already exists in chat {chat_id}")
 
         # добавляем новую очередь
-        new_queue = {"name": queue_name, "queue": [], "last_queue_message_id": None}
+        new_queue = {
+            "name": queue_name,
+            "queue": [],
+            "last_queue_message_id": None,
+            "last_modified": await get_now_formatted_time(),
+        }
+
         queues.append(new_queue)
 
         await self.update_chat(chat_id, {"queues": queues})
@@ -151,9 +160,20 @@ class QueueRepository:
 
         if queue_idx is not None:
             doc["queues"][queue_idx]["queue"] = new_queue
+            doc["queues"][queue_idx]["last_modified"] = await get_now_formatted_time()
             await self.update_chat(chat_id, {"queues": doc["queues"]})
         else:
             raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
+
+    async def get_last_modified_time(self, chat_id: int, queue_name: str) -> Optional[int]:
+        doc = await self.get_chat(chat_id)
+        if not doc:
+            raise ChatNotFoundError(f"chat {chat_id} not found")
+
+        for q in doc.get("queues", []):
+            if q.get("name") == queue_name:
+                return q.get("last_modified")
+        raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
 
     async def get_queue_message_id(self, chat_id: int, queue_name: str) -> Optional[int]:
         """

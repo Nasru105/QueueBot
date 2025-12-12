@@ -30,7 +30,7 @@ class QueueMessageService:
         try:
             last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
             if last_id:
-                await safe_delete(context, ctx, last_id)
+                await safe_delete(context.bot, ctx, last_id)
 
             sent = await context.bot.send_message(
                 chat_id=ctx.chat_id,

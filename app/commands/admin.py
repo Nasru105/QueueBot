@@ -5,9 +5,9 @@ from functools import wraps
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
+from app.handlers.scheduler import cancel_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
-from app.services.mongo_storage import log_collection
 from app.utils.utils import delete_later, is_user_admin, parse_queue_args, safe_delete, with_ctx
 
 
@@ -58,12 +58,12 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     # Удаляем сообщение очереди
     last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, queue_name)
     if last_id:
-        await safe_delete(context, ctx, last_id)
-    # Удаляем очередь
-    await queue_service.delete_queue(ctx)
+        await safe_delete(context.bot, ctx, last_id)
 
-    # Обновляем меню и все очереди
-    await queue_service.mass_update_existing_queues(context.bot, ctx)
+    message_list_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
+    await queue_service.delete_queue(ctx)
+    await queue_service.mass_update_existing_queues(context.bot, ctx, message_list_id)
+    await cancel_queue_expiration(context, ctx)
 
 
 @with_ctx
@@ -72,7 +72,7 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     # Удаляем меню
     last_list_message_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_list_message_id:
-        await safe_delete(context, ctx, last_list_message_id)
+        await safe_delete(context.bot, ctx, last_list_message_id)
         await queue_service.repo.clear_list_message_id(ctx.chat_id)
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
@@ -80,8 +80,9 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         ctx.queue_name = queue_name
         last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, queue_name)
         if last_id:
-            await safe_delete(context, ctx, last_id)
+            await safe_delete(context.bot, ctx, last_id)
         await queue_service.delete_queue(ctx)
+        await cancel_queue_expiration(context, ctx)
 
 
 @with_ctx
@@ -147,7 +148,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
 @with_ctx
 @admins_only
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
-    await safe_delete(context, ctx, update.message.message_id)
+    await safe_delete(context.bot, ctx, update.message.message_id)
 
     args = context.args
     if len(args) < 3:
@@ -217,67 +218,3 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
 
     # Обновляем сообщение для новой очереди
     await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
-
-
-@with_ctx
-@admins_only
-async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
-    MAX_LEN = 4000  # чуть меньше лимита 4096
-
-    def format_log(log: dict) -> str:
-        lines = []
-        lines.append(f"📄 {log.get('asctime', '?')}")
-        lines.append(f"🔹 {log.get('message', '')}")
-
-        chat_title = log.get("chat_title")
-        queue = log.get("queue")
-        actor = log.get("actor")
-
-        info_line = []
-        if chat_title:
-            info_line.append(chat_title)
-        if queue:
-            info_line.append(queue)
-
-        if info_line:
-            lines.append("🏷️ " + " | ".join(info_line))
-
-        if actor:
-            lines.append(f"👤 {actor}")
-
-        return "\n".join(lines)
-
-    def split_text(text: str, max_len: int = MAX_LEN) -> list[str]:
-        """Разбивает текст на части, чтобы не превышать лимит Telegram."""
-        parts = []
-        while len(text) > max_len:
-            cut = text.rfind("\n──────────────\n", 0, max_len)  # разрезать по логам
-            if cut == -1:
-                cut = max_len
-            parts.append(text[:cut])
-            text = text[cut:]
-        parts.append(text)
-        return parts
-
-    message_id: int = update.message.message_id
-
-    await safe_delete(context, ctx, message_id)
-
-    args = context.args
-    try:
-        count = int(args[-1])
-    except Exception:
-        count = 10
-
-    cursor = log_collection.find().sort("_id", -1).limit(count)
-    logs = await cursor.to_list(length=count)
-
-    formatted = "\n──────────────\n".join(format_log(log) for log in logs)
-
-    # 🔥 Разбиваем на части
-    parts = split_text(formatted)
-
-    # 📨 Отправляем по очереди
-    for part in parts:
-        msg = await context.bot.send_message(ctx.chat_id, part or "Логи пусты.", message_thread_id=ctx.thread_id)
-        create_task(delete_later(context, ctx, msg.message_id, 60))

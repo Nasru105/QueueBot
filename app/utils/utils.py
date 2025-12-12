@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime
 from functools import wraps
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
@@ -26,7 +27,7 @@ def with_ctx(func):
 
         if update.message:
             message_id: int = update.message.message_id
-            await safe_delete(context, ctx, message_id)
+            await safe_delete(context.bot, ctx, message_id)
 
         kwargs["ctx"] = ctx
         return await func(update, context, *args, **kwargs)
@@ -35,9 +36,9 @@ def with_ctx(func):
 
 
 # Безопасное удаление сообщения.
-async def safe_delete(context, ctx: ActionContext, message_id):
+async def safe_delete(bot, ctx: ActionContext, message_id):
     try:
-        await context.bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
+        await bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
         QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
 
@@ -56,7 +57,7 @@ def strip_user_full_name(user: User) -> str:
 
 async def delete_later(context, ctx, message_id, time=5):
     await asyncio.sleep(time)
-    await safe_delete(context, ctx, message_id)
+    await safe_delete(context.bot, ctx, message_id)
 
 
 # app/queues_service/__init__.py или utils
@@ -107,3 +108,55 @@ async def is_user_admin(context, chat_id, user_id) -> bool:
         return member.status in ("administrator", "creator")
     except Exception:
         return False
+
+
+async def get_now_formatted_time():
+    # Текущее время
+    now = datetime.now()
+    formatted_time = now.strftime("%d.%m.%Y %H:%M:%S")
+    return formatted_time
+
+
+def parse_flags_args(args: List[str], target_flags: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:
+    """
+    Универсальный разбор аргументов:
+    - флаги вида '-h 12'
+    - слитные флаги '-h12'
+    - любое число флагов
+    - сохраняет порядок обычных аргументов
+
+    Возвращает:
+        (обычные_аргументы, словарь_флагов)
+    """
+
+    args_parts = []
+    skip_next = False
+
+    # Множество ключей флагов для быстрого поиска
+    flag_keys = set(target_flags.keys())
+
+    for i, part in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+
+        # 1. Флаг формата "-h"
+        if part in flag_keys:
+            if i + 1 < len(args):
+                target_flags[part] = args[i + 1]
+                skip_next = True
+                continue
+            else:
+                raise ValueError(f"После флага '{part}' нужно указать значение")
+
+        # 2. Флаг формата "-h12"
+        for flag in flag_keys:
+            if part.startswith(flag) and len(part) > len(flag):
+                value = part[len(flag) :]
+                target_flags[flag] = value
+                break
+        else:
+            # 3. Обычный аргумент
+            args_parts.append(part)
+
+    return args_parts, target_flags
