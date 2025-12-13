@@ -34,7 +34,14 @@ async def queues_menu_keyboard(queues_list):
 async def queue_swap_keyboard(queue, queue_index):
     keyboard = []
     for i, user in enumerate(queue):
-        button = InlineKeyboardButton(text=f"{user}", callback_data=f"queue|{queue_index}|swap|{i}")
+        # expect user to be dict {user_id, display_name}
+        if isinstance(user, dict):
+            text = user.get("display_name") or str(user.get("user_id"))
+            cb = f"queue|{queue_index}|swap|uid:{user.get('user_id')}"
+        else:
+            text = str(user)
+            cb = f"queue|{queue_index}|swap|{i}"
+        button = InlineKeyboardButton(text=f"{text}", callback_data=cb)
         keyboard.append([button])
     keyboard.append(
         [

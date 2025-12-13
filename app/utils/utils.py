@@ -35,6 +35,17 @@ def with_ctx(func):
     return wrapper
 
 
+# helper to check presence by user_id
+async def has_user(queue, user_id, display_name):
+    for item in queue:
+        if item.get("user_id") == user_id:
+            return True
+        elif item.get("display_name") == display_name:
+            item["user_id"] = user_id
+            return True
+    return False
+
+
 # Безопасное удаление сообщения.
 async def safe_delete(bot, ctx: ActionContext, message_id):
     try:
@@ -83,7 +94,7 @@ def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str],
     return None, []
 
 
-def parse_users_names(args: List[str], queue: List[str]) -> Tuple[Optional[str], Optional[str]]:
+def parse_users_names(args: List[str], queue: List[dict]) -> Tuple[Optional[str], Optional[str]]:
     """
     Ищет два имени в очереди из аргументов.
     Возвращает (имя1, имя2) или (None, None)
@@ -91,12 +102,15 @@ def parse_users_names(args: List[str], queue: List[str]) -> Tuple[Optional[str],
     if len(args) < 2:
         return None, None
 
+    # Извлекаем все имена из очереди
+    queue_names = [user["display_name"] for user in queue]
+
     # Пробуем найти два разных имени
     for i in range(len(args) - 1):
         name1 = " ".join(args[: i + 1])
         name2 = " ".join(args[i + 1 :])
 
-        if name1 in queue and name2 in queue and name1 != name2:
+        if name1 in queue_names and name2 in queue_names and name1 != name2:
             return name1, name2
 
     return None, None

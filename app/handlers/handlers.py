@@ -12,7 +12,7 @@ from app.queues.models import ActionContext
 from app.queues_menu.queue_menu import handle_queue_menu
 from app.queues_menu.queues_menu import handle_queues_menu
 from app.services.logger import QueueLogger
-from app.utils.utils import with_ctx
+from app.utils.utils import has_user, with_ctx
 
 # Локи на чат
 chat_locks: dict[int, Lock] = {}
@@ -33,14 +33,19 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
 
     user = query.from_user
-    user_name = await queue_service.get_user_display_name(user, ctx.chat_id)
-
     # Безопасное получение данных из callback
+    parts = query.data.split("|")
+    if len(parts) not in (3, 4):
+        QueueLogger.log(ctx, action="Invalid callback data", level=logging.WARNING)
+        return
+
+    _, queue_index_str, action = parts[0:3]
+    target = parts[3] if len(parts) == 4 else None
+
     try:
-        _, queue_index_str, action = query.data.split("|")
         queue_index = int(queue_index_str)
     except ValueError:
-        QueueLogger.log(ctx, action="Invalid callback data", level=logging.WARNING)
+        QueueLogger.log(ctx, action="Invalid queue index", level=logging.WARNING)
         return
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
@@ -53,10 +58,60 @@ async def handle_queue_button(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     async with get_chat_lock(ctx.chat_id):
         current_queue = await queue_service.repo.get_queue(ctx.chat_id, queue_name)
-        if action == "join" and user_name not in current_queue:
-            await queue_service.join_to_queue(ctx, user_name)
-        elif action == "leave" and user_name in current_queue:
-            await queue_service.leave_from_queue(ctx, user_name)
+        # if there is an entry with display_name only, attach current user id
+        try:
+            display_name = await queue_service.get_user_display_name(user, ctx.chat_id)
+            await queue_service.repo.attach_user_id_by_display_name(ctx.chat_id, queue_name, display_name, user.id)
+            current_queue = await queue_service.repo.get_queue(ctx.chat_id, queue_name)
+        except Exception:
+            pass
+
+        if action == "join":
+            if not await has_user(current_queue, user.id, display_name):
+                await queue_service.join_to_queue(ctx, user)
+            else:
+                return
+        elif action == "leave":
+            print(current_queue, user, display_name)
+            if await has_user(current_queue, user.id, display_name):
+                print("has_user")
+                await queue_service.leave_from_queue(ctx, user)
+            else:
+                return
+        elif action == "swap" and target:
+            # swap requested: target may be uid:<id> or an index
+            requester_id = user.id
+            # find requester index
+            req_idx = next((i for i, it in enumerate(current_queue) if it.get("user_id") == requester_id), None)
+            if req_idx is None:
+                await query.answer("Вы не в очереди")
+                return
+
+            # resolve target
+            if target.startswith("uid:"):
+                try:
+                    target_uid = int(target.split(":", 1)[1])
+                except Exception:
+                    await query.answer("Неверный целевой пользователь")
+                    return
+                tgt_idx = next((i for i, it in enumerate(current_queue) if it.get("user_id") == target_uid), None)
+            else:
+                try:
+                    tgt_idx = int(target)
+                except Exception:
+                    tgt_idx = None
+
+            if tgt_idx is None:
+                await query.answer("Пользователь больше не в очереди")
+                return
+
+            if tgt_idx == req_idx:
+                await query.answer("Нельзя поменяться с самим собой")
+                return
+
+            # perform swap
+            current_queue[req_idx], current_queue[tgt_idx] = current_queue[tgt_idx], current_queue[req_idx]
+            await queue_service.repo.update_queue(ctx.chat_id, queue_name, current_queue)
         else:
             return
 

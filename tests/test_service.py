@@ -114,6 +114,23 @@ class TestJoinToQueue:
         assert position is None
         mock_logger.log.assert_called()
 
+    @pytest.mark.asyncio
+    async def test_join_attach_existing_display_name(self, service, mock_repo, mock_logger, context):
+        """Если в очереди есть запись без user_id с таким display_name — привязываем user_id и возвращаем позицию."""
+        # setup
+        mock_repo.get_queue.return_value = [{"user_id": None, "display_name": "Bob"}]
+        mock_repo.attach_user_id_by_display_name = AsyncMock(return_value=0)
+        service.user_service.get_user_display_name = AsyncMock(return_value="Bob")
+
+        class U:
+            id = 42
+
+        position = await service.join_to_queue(context, U)
+        assert position == 1
+        mock_repo.attach_user_id_by_display_name.assert_called_once_with(123, "Queue 1", "Bob", 42)
+        mock_repo.add_to_queue.assert_not_called()
+        mock_logger.joined.assert_called()
+
 
 class TestLeaveFromQueue:
     """Тесты выхода из очереди."""
@@ -133,6 +150,22 @@ class TestLeaveFromQueue:
         mock_repo.remove_from_queue.side_effect = QueueError("Not in queue")
         position = await service.leave_from_queue(context, "Bob")
         assert position is None
+
+    @pytest.mark.asyncio
+    async def test_leave_attaches_and_removes(self, service, mock_repo, mock_logger, context):
+        """Если в очереди есть запись с display_name и без id — при выходе привязываем id и удаляем."""
+        mock_repo.get_queue.return_value = [{"user_id": None, "display_name": "Bob"}]
+        mock_repo.attach_user_id_by_display_name = AsyncMock(return_value=0)
+        mock_repo.remove_from_queue = AsyncMock(return_value=1)
+        service.user_service.get_user_display_name = AsyncMock(return_value="Bob")
+
+        class U:
+            id = 42
+
+        position = await service.leave_from_queue(context, U)
+        assert position == 1
+        mock_repo.attach_user_id_by_display_name.assert_called_once_with(123, "Queue 1", "Bob", 42)
+        mock_repo.remove_from_queue.assert_called_once_with(123, "Queue 1", 42)
 
 
 class TestRemoveFromQueue:

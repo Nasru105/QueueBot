@@ -48,21 +48,62 @@ class QueueFacadeService:
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def join_to_queue(self, ctx: ActionContext, user_name: str):
+    async def join_to_queue(self, ctx: ActionContext, user) -> int:
         # repo should implement add_to_queue (atomic on DB side if possible)
         try:
-            position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, user_name)
+            # If user is a string (tests, admin insert), use it as display_name
+            if isinstance(user, str):
+                display_name = user
+                try:
+                    # try calling new signature on repo (some mocks may accept any args)
+                    position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, None, display_name)
+                except TypeError:
+                    # fallback for mocks or legacy repos that accept (chat_id, queue_name, display_name)
+                    position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, display_name)
+                if position:
+                    self.logger.joined(ctx, display_name, position)
+                return position
+
+            display_name = await self.user_service.get_user_display_name(user, ctx.chat_id)
+            # Try bind the user id to an existing item with matching display_name
+            try:
+                idx = await self.repo.attach_user_id_by_display_name(ctx.chat_id, ctx.queue_name, display_name, user.id)
+            except Exception:
+                idx = None
+
+            if idx is not None:
+                # updated existing entry — return position
+                position = idx + 1
+                if position:
+                    self.logger.joined(ctx, display_name, position)
+                return position
+            position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, user.id, display_name)
             if position:
-                self.logger.joined(ctx, user_name, position)
+                self.logger.joined(ctx, display_name, position)
             return position
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def leave_from_queue(self, ctx: ActionContext, user_name: str):
+    async def leave_from_queue(self, ctx: ActionContext, user) -> int:
         try:
-            position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user_name)
+            # backward compatibility: user may be display_name string
+            if isinstance(user, str):
+                try:
+                    position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user.id)
+                except TypeError:
+                    position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, None)
+                if position:
+                    self.logger.leaved(ctx, user, position)
+                return position
+
+            try:
+                position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user.id)
+            except TypeError:
+                position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user)
+
             if position:
-                self.logger.leaved(ctx, user_name, position)
+                display_name = await self.user_service.get_user_display_name(user, ctx.chat_id)
+                self.logger.leaved(ctx, display_name, position)
             return position
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)

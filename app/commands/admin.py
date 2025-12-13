@@ -148,8 +148,6 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
 @with_ctx
 @admins_only
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
-    await safe_delete(context.bot, ctx, update.message.message_id)
-
     args = context.args
     if len(args) < 3:
         err = await context.bot.send_message(

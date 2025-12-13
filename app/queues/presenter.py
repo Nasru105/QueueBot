@@ -14,11 +14,17 @@ class QueuePresenter:
         self.keyboard_factory = keyboard_factory
 
     @staticmethod
-    def format_queue_text(queue_name: str, items: List[str]) -> str:
+    def format_queue_text(queue_name: str, items: List) -> str:
         name_escaped = escape_markdown(queue_name, version=2)
         if not items:
             return f"*`{name_escaped}`*\n\nОчередь пуста\\."
-        lines = [f"{i + 1}\\. {escape_markdown(u, version=2)}" for i, u in enumerate(items)]
+        lines = []
+        for i, u in enumerate(items):
+            if isinstance(u, dict):
+                display = u.get("display_name") or str(u.get("user_id"))
+            else:
+                display = str(u)
+            lines.append(f"{i + 1}\\. {escape_markdown(display, version=2)}")
         return f"*`{name_escaped}`*\n\n" + "\n".join(lines)
 
     def build_keyboard(self, queue_index: int) -> Optional[InlineKeyboardMarkup]:
