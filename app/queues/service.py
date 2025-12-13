@@ -1,11 +1,11 @@
 import logging
 from typing import List
 
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ExtBot
 
 from app.queues.queue_repository import QueueRepository
+from app.queues_menu.inline_keyboards import queues_menu_keyboard
 from app.services.logger import QueueLogger
-from app.utils.InlineKeyboards import queues_keyboard
 from app.utils.utils import parse_users_names, safe_delete
 
 from .domain import QueueDomainService
@@ -245,7 +245,7 @@ class QueueFacadeService:
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def mass_update_existing_queues(self, bot, ctx, message_list_id):
+    async def mass_update_existing_queues(self, bot: ExtBot[None], ctx, message_list_id):
         queues = await self.repo.get_all_queues(ctx.chat_id)
 
         if not queues:
@@ -253,9 +253,9 @@ class QueueFacadeService:
         try:
             await self.message_service.mass_update(bot, ctx, queues, self.presenter)
             if message_list_id:
-                new_keyboard = await queues_keyboard(list(queues.keys()))
-                await bot.edit_message_reply_markup(
-                    chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
+                new_keyboard = await queues_menu_keyboard(list(queues.keys()))
+                await bot.edit_message_text(
+                    text="Выберите очередь:", chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
                 )
 
         except QueueError as ex:

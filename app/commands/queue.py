@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from app.handlers.scheduler import schedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
-from app.utils.InlineKeyboards import queues_keyboard
+from app.queues_menu.inline_keyboards import queues_menu_keyboard
 from app.utils.utils import delete_later, parse_flags_args, safe_delete, with_ctx
 
 
@@ -43,14 +43,14 @@ async def start_help(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Ac
     text = (
         "*Справка по командам QueueBot*\n\n"
         "*Создание очереди:*\n"
-        "/create Название [\\-h часы]\n"
+        "/create [Имя очереди] [\\-h часы]\n"
         "• Параметр \\-h задаёт срок жизни очереди в часах\\.\n"
         "• Если не указать \\-h, очередь живёт 24 часа\\.\n"
         "• Срок жизни продлевается на 1 час после последнего обновления очереди\\.\n\n"
         "Примеры:\n"
-        "• /create Очередь 3\n"
-        "• /create Дежурство \\-h 12\n"
-        "• /create Очередь 4 \\-h 48\n\n"
+        "/create Очередь 3\n"
+        "/create \\-h 3\n\n"
+        "/create Дежурство \\-h 12\n"
         "*Просмотр активных очередей:*\n"
         "/queues — показывает все активные очереди в чате\\.\n\n"
         "*Управление отображаемым именем:*\n"
@@ -124,7 +124,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         sent = await context.bot.send_message(
             chat_id=ctx.chat_id,
             text="Выберите очередь:",
-            reply_markup=await queues_keyboard(queue_names),
+            reply_markup=await queues_menu_keyboard(queue_names),
             message_thread_id=ctx.thread_id,
         )
         await queue_service.repo.set_list_message_id(ctx.chat_id, sent.message_id)

@@ -1,6 +1,6 @@
 # queue/__init__.py
 from app.queues.service import QueueFacadeService
-from app.utils.InlineKeyboards import queue_keyboard
+from app.queues.inline_keyboards import queue_keyboard
 
 from .queue_repository import QueueRepository
 
