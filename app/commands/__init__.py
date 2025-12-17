@@ -3,7 +3,15 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 from app.commands.reports import get_jobs, get_logs
 from app.handlers.handlers import handle_queue_button, menu_router
 
-from .admin import delete_all_queues, delete_queue, insert_user, remove_user, rename_queue, replace_users
+from .admin import (
+    delete_all_queues,
+    delete_queue,
+    insert_user,
+    remove_user,
+    rename_queue,
+    replace_users,
+    set_queue_expiration_time,
+)
 from .queue import chat_nickname, create, global_nickname, help_commands, queues, start_help
 
 
@@ -23,6 +31,8 @@ def register_handlers(app: Application):
     app.add_handler(CommandHandler("remove", remove_user))
     app.add_handler(CommandHandler("replace", replace_users))
     app.add_handler(CommandHandler("rename", rename_queue))
+
+    app.add_handler(CommandHandler("set_expire_time", set_queue_expiration_time))
 
     app.add_handler(CommandHandler("logs", get_logs))
     app.add_handler(CommandHandler("jobs", get_jobs))

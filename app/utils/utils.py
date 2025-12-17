@@ -22,7 +22,9 @@ def with_ctx(func):
             chat_title=chat.title or chat.username or "Личный чат",
             queue_name="",
             actor=user.username or "Unknown",
-            thread_id=update.message.message_thread_id if update.message else None,
+            thread_id=update.message.message_thread_id
+            if update.message
+            else update.callback_query.message.message_thread_id,
         )
 
         if update.message:
@@ -69,6 +71,13 @@ def strip_user_full_name(user: User) -> str:
 async def delete_later(context, ctx, message_id, time=5):
     await asyncio.sleep(time)
     await safe_delete(context.bot, ctx, message_id)
+
+
+async def delete_message_later(context, ctx, text, time=5, reply_markup=None):
+    error_message = await context.bot.send_message(
+        ctx.chat_id, text, message_thread_id=ctx.thread_id, reply_markup=reply_markup, disable_notification=True
+    )
+    asyncio.create_task(delete_later(context, ctx, error_message.message_id, time))
 
 
 # app/queues_service/__init__.py или utils

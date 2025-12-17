@@ -1,3 +1,4 @@
+# app/queues/service/queue_auto_cleanup_service.py
 from datetime import datetime, timedelta
 
 from app.queues.models import ActionContext
@@ -26,6 +27,28 @@ class QueueAutoCleanupService:
         jobs = context.job_queue.get_jobs_by_name(self._job_name(ctx))
         for job in jobs:
             job.schedule_removal()
+
+    async def reschedule_expiration(self, context, ctx: ActionContext, new_expires_in_seconds=86_400):
+        """
+        Изменяет время автоудаления очереди.
+        Удаляет существующий job и создает новый с новым временем.
+        """
+        # Отменяем существующий job
+        await self.cancel_expiration(context, ctx)
+
+        # Создаем новый job с новым временем
+        await self.schedule_expiration(context, ctx, new_expires_in_seconds)
+
+    async def get_remaining_time(self, context, ctx: ActionContext) -> timedelta:
+        """
+        Возвращает оставшееся время до удаления очереди.
+        """
+        jobs = context.job_queue.get_jobs_by_name(self._job_name(ctx))
+        if not jobs:
+            return timedelta(seconds=0)
+
+        job = jobs[0]
+        return job.trigger.trigger_date - datetime.now()
 
     @staticmethod
     def _job_name(ctx: ActionContext):

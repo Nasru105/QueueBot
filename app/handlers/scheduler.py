@@ -12,3 +12,8 @@ async def schedule_queue_expiration(context, ctx, expires_in=86_400):
 
 async def cancel_queue_expiration(context, ctx):
     await auto_cleanup_service.cancel_expiration(context, ctx)
+
+
+async def reschedule_queue_expiration(context, ctx, new_expires_in_hours=24):
+    new_expires_in_seconds = 3600 * new_expires_in_hours
+    await auto_cleanup_service.reschedule_expiration(context, ctx, new_expires_in_seconds)

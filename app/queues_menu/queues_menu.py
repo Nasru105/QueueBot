@@ -1,5 +1,4 @@
 import logging
-from asyncio import create_task
 
 # import traceback
 from telegram import Update
@@ -9,7 +8,14 @@ from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.queues_menu.inline_keyboards import queue_menu_keyboard
 from app.services.logger import QueueLogger
-from app.utils.utils import delete_later, is_user_admin, safe_delete
+from app.utils.utils import delete_message_later, is_user_admin, safe_delete
+
+
+async def hide_list_message(context, ctx):
+    last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
+    if last_queues_id:
+        await safe_delete(context.bot, ctx, last_queues_id)
+        await queue_service.repo.clear_list_message_id(ctx.chat_id)
 
 
 async def handle_queues_menu(
@@ -22,13 +28,6 @@ async def handle_queues_menu(
 
     user_id = query.from_user.id
     chat = query.message.chat
-
-    if action == "hide":
-        last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
-        if last_queues_id:
-            await safe_delete(context.bot, ctx, last_queues_id)
-            await queue_service.repo.clear_list_message_id(ctx.chat_id)
-        return
 
     # Показать очередь
     if action == "get":
@@ -52,12 +51,13 @@ async def handle_queues_menu(
     # Удалить все очереди
     elif action == "delete":
         if chat.title and not await is_user_admin(context, ctx.chat_id, user_id):
-            error_message = await context.bot.send_message(
-                ctx.chat_id, "Вы не являетесь администратором", message_thread_id=ctx.thread_id
-            )
-            create_task(delete_later(context, ctx, error_message.message_id))
+            await delete_message_later(context, ctx, "Вы не являетесь администратором")
             return
         await delete_all_queues(ctx, context)
+
+    elif action == "hide":
+        await hide_list_message(context, ctx)
+        return
 
 
 async def delete_all_queues(ctx: ActionContext, context: ContextTypes.DEFAULT_TYPE):

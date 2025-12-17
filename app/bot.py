@@ -11,7 +11,7 @@ if __package__ is None:
     sys.path.insert(0, project_root)
 
 from dotenv import load_dotenv
-from telegram.ext import Application, ApplicationBuilder
+from telegram.ext import ApplicationBuilder
 
 from app.commands import register_handlers, set_commands
 from app.services.logger import QueueLogger, logger
@@ -28,15 +28,8 @@ async def ensure_indexes():
     """Создаёт уникальный индекс по chat_id"""
     try:
         await queue_collection.create_index("chat_id", unique=True)
-        QueueLogger.log("MongoDB index on 'chat_id' ensured.")
     except Exception as e:
-        QueueLogger.log(f"Failed to create index: {e}", level=ERROR)
-
-
-async def post_init(application: Application) -> None:
-    """Вызывается после инициализации Application, но до старта polling."""
-    await set_commands(application)
-    await ensure_indexes()
+        QueueLogger.log(action=f"Failed to create index: {e}", level=ERROR)
 
 
 async def run_bot() -> None:
@@ -48,14 +41,17 @@ async def run_bot() -> None:
     attempt = 0
     while attempt < MAX_RETRIES:
         try:
-            app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).post_init(post_init).build()
-
+            await ensure_indexes()
+            app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
+            await set_commands(app)
             register_handlers(app)
             logger.info("Запуск бота...")
 
             await app.initialize()
             await app.start()
-            await app.updater.start_polling()
+            # Ensure polling requests include callback_query updates (some environments may restrict allowed_updates)
+            allowed_updates = ["message", "callback_query", "inline_query", "my_chat_member", "chat_member"]
+            await app.updater.start_polling(allowed_updates=allowed_updates)
 
             # Держим бота живым
             stop_event = asyncio.Event()

@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.queues_menu.inline_keyboards import queue_swap_keyboard, queues_menu_keyboard
+from app.queues_menu.queues_menu import hide_list_message
 from app.services.logger import QueueLogger
 from app.utils.utils import safe_delete
 
@@ -26,6 +27,7 @@ async def handle_queue_menu(
 
     if action == "refresh":
         await queue_service.send_queue_message(ctx, context)
+        await hide_list_message(context, ctx)
 
     elif action == "swap":
         await query.edit_message_text(
@@ -35,21 +37,10 @@ async def handle_queue_menu(
 
     elif action == "delete":
         await delete_queue(ctx, query, context)
+        await hide_list_message(context, ctx)
 
     elif action == "back":
         await query.edit_message_text(text="Список очередей", reply_markup=await queues_menu_keyboard(queue_names))
-
-
-# # Удалить конкретную очередь
-# elif action == "delete" and queue_name:
-#     if chat.title and not await is_user_admin(context, ctx.chat_id, user_id):
-#         error_message = await context.bot.send_message(
-#             ctx.chat_id, "Вы не являетесь администратором", message_thread_id=ctx.thread_id
-#         )
-#         create_task(delete_later(context, ctx, error_message.message_id))
-#         return
-#     async with get_chat_lock(ctx.chat_id):
-#         await delete_queue(ctx, query, context)
 
 
 async def delete_queue(ctx: ActionContext, query, context: ContextTypes.DEFAULT_TYPE):

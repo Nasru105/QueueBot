@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes, ExtBot
 
 from app.queues.models import ActionContext
 from app.queues.presenter import QueuePresenter
+from app.queues.queue_repository import QueueRepository
 from app.services.logger import QueueLogger
 from app.utils.utils import safe_delete
 
@@ -19,7 +20,7 @@ class QueueMessageService:
     """
 
     def __init__(self, repo, bot_logger=QueueLogger):
-        self.repo = repo
+        self.repo: QueueRepository = repo
         self.logger = bot_logger
 
     async def send_queue_message(self, ctx: ActionContext, text: str, keyboard, context: ContextTypes.DEFAULT_TYPE):
@@ -38,6 +39,7 @@ class QueueMessageService:
                 parse_mode="MarkdownV2",
                 reply_markup=keyboard,
                 message_thread_id=ctx.thread_id,
+                disable_notification=True,
             )
             await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
             return sent.message_id
@@ -85,9 +87,7 @@ class QueueMessageService:
             # игнорируем "Message is not modified"
             if "not modified" in str(e).lower():
                 return msg_id
-            self.logger.log(
-                ctx.chat_title, ctx.queue_name, ctx.actor, f"edit failed (BadRequest): {e}", level=logging.ERROR
-            )
+            self.logger.log(ctx, f"edit failed (BadRequest): {e}", level=logging.ERROR)
             raise MessageServiceError(e)
         except Exception as ex:
             # log and fallback to sending new message (if bot context available)
@@ -98,6 +98,7 @@ class QueueMessageService:
                     text=text,
                     parse_mode="MarkdownV2",
                     reply_markup=keyboard,
+                    disable_notification=True,
                 )
                 await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
                 return sent.message_id

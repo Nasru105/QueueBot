@@ -267,7 +267,9 @@ class QueueRepository:
 
         return doc_user
 
-    async def attach_user_id_by_display_name(self, chat_id: int, queue_name: str, display_name: str, user_id: int) -> Optional[int]:
+    async def attach_user_id_by_display_name(
+        self, chat_id: int, queue_name: str, display_name: str, user_id: int
+    ) -> Optional[int]:
         """Если в очереди есть элемент с display_name, то привязать к нему user_id и вернуть индекс (0-based).
         Если не найдено — вернуть None.
         """

@@ -1,14 +1,13 @@
 # app/handlers/admin_commands.py
-from asyncio import create_task
 from functools import wraps
 
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.handlers.scheduler import cancel_queue_expiration
+from app.handlers.scheduler import cancel_queue_expiration, reschedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
-from app.utils.utils import delete_later, is_user_admin, parse_queue_args, safe_delete, with_ctx
+from app.utils.utils import delete_message_later, is_user_admin, parse_queue_args, safe_delete, with_ctx
 
 
 def admins_only(func):
@@ -24,12 +23,10 @@ def admins_only(func):
         if not chat.title:
             return await func(update, context, *args, **kwargs)
 
-        if is_user_admin(context, ctx.chat_id, user.id):
+        if await is_user_admin(context, ctx.chat_id, user.id):
             return await func(update, context, *args, **kwargs)
-        error_message = await context.bot.send_message(
-            ctx.chat_id, "Вы не являетесь администратором", message_thread_id=ctx.thread_id
-        )
-        create_task(delete_later(context, ctx, error_message.message_id))
+
+        await delete_message_later(context, ctx, "Вы не являетесь администратором")
         return None
 
     return wrapper
@@ -39,20 +36,14 @@ def admins_only(func):
 @admins_only
 async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     if not context.args:
-        error_message = await context.bot.send_message(
-            ctx.chat_id, "Использование: \n /delete <Имя очереди>", message_thread_id=ctx.thread_id
-        )
-        create_task(delete_later(context, ctx, error_message.message_id))
+        await delete_message_later(context, ctx, "Использование: \n /delete <Имя очереди>")
         return
 
     queue_name = " ".join(context.args)
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     ctx.queue_name = queue_name
     if queue_name not in queues:
-        error_message = await context.bot.send_message(
-            ctx.chat_id, f"Очередь {queue_name} не найдена.", message_thread_id=ctx.thread_id
-        )
-        create_task(delete_later(context, ctx, error_message.message_id))
+        await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
         return
 
     # Удаляем сообщение очереди
@@ -90,12 +81,7 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
     if len(args) < 2:
-        err = await context.bot.send_message(
-            ctx.chat_id,
-            "Использование: \n /insert <Имя очереди> <Имя пользователя> [позиция]",
-            message_thread_id=ctx.thread_id,
-        )
-        create_task(delete_later(context, ctx, err.message_id))
+        await delete_message_later(context, ctx, "Использование: \n /insert <Имя очереди> <Имя пользователя> [позиция]")
         return
 
     queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
@@ -103,8 +89,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
     ctx.queue_name = queue_name
 
     if not queue_name:
-        err = await context.bot.send_message(ctx.chat_id, "Очередь не найдена.", message_thread_id=ctx.thread_id)
-        create_task(delete_later(context, ctx, err.message_id))
+        await delete_message_later(context, ctx, "Очередь не найдена.")
         return
 
     await queue_service.insert_into_queue(ctx, rest)
@@ -117,12 +102,9 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
     if len(args) < 2:
-        err = await context.bot.send_message(
-            ctx.chat_id,
-            "Использование:\n /remove <Имя очереди> <Имя пользователя или Позиция>",
-            message_thread_id=ctx.thread_id,
+        await delete_message_later(
+            context, ctx, "Использование:\n /remove <Имя очереди> <Имя пользователя или Позиция>"
         )
-        create_task(delete_later(context, ctx, err.message_id))
         return
 
     queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
@@ -130,8 +112,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
     ctx.queue_name = queue_name
 
     if not queue_name:
-        err = await context.bot.send_message(ctx.chat_id, "Очередь не найдена.", message_thread_id=ctx.thread_id)
-        create_task(delete_later(context, ctx, err.message_id))
+        await delete_message_later(context, ctx, "Очередь не найдена.")
         return
 
     removed_name, position, _ = await queue_service.remove_from_queue(ctx, rest)
@@ -139,10 +120,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
     if removed_name:
         await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
     else:
-        err = await context.bot.send_message(
-            ctx.chat_id, "Пользователь не найден в очереди.", message_thread_id=ctx.thread_id
-        )
-        create_task(delete_later(context, ctx, err.message_id))
+        await delete_message_later(context, ctx, "Пользователь не найден в очереди.")
 
 
 @with_ctx
@@ -150,12 +128,9 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
     if len(args) < 3:
-        err = await context.bot.send_message(
-            ctx.chat_id,
-            "Использование:\n/replace <Очередь> <№1> <№2> или /replace <Очередь> <Имя 1> <Имя 2>",
-            message_thread_id=ctx.thread_id,
+        await delete_message_later(
+            context, ctx, "Использование:\n/replace <Очередь> <№1> <№2> или \n/replace <Очередь> <Имя 1> <Имя 2>"
         )
-        create_task(delete_later(context, ctx, err.message_id))
         return
 
     # --- 1. Парсим имя очереди ---
@@ -166,10 +141,7 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
     ctx.queue_name = queue_name
 
     if not queue_name:
-        error_message = await context.bot.send_message(
-            chat_id=ctx.chat_id, text="Очередь не найдена.", message_thread_id=ctx.thread_id
-        )
-        create_task(delete_later(context, ctx, error_message.message_id))
+        await delete_message_later(context, ctx, "Очередь не найдена.")
         return
 
     await queue_service.replace_users_queue(ctx, rest_names)
@@ -181,12 +153,7 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
 async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
     if len(args) < 2:
-        error = await context.bot.send_message(
-            chat_id=ctx.chat_id,
-            text="Использование: /rename <Старое имя> <Новое имя>",
-            message_thread_id=update.message.message_thread_id,
-        )
-        create_task(delete_later(context, ctx, error.message_id, 10))
+        await delete_message_later(context, ctx, "Использование: /rename <Старое имя> <Новое имя>")
         return
 
     queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
@@ -194,21 +161,11 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     new_name = " ".join(rest).strip()
 
     if not old_name or not new_name:
-        error = await context.bot.send_message(
-            chat_id=ctx.chat_id,
-            text="Укажите старое и новое имя очереди.",
-            message_thread_id=update.message.message_thread_id,
-        )
-        create_task(delete_later(context, ctx, error.message_id))
+        await delete_message_later(context, ctx, "Укажите старое и новое имя очереди.")
         return
 
     if new_name in queue_names:
-        error = await context.bot.send_message(
-            chat_id=ctx.chat_id,
-            text="Очередь с новым именем уже существует.",
-            message_thread_id=update.message.message_thread_id,
-        )
-        create_task(delete_later(context, ctx, error.message_id))
+        await delete_message_later(context, ctx, "Очередь с новым именем уже существует.")
         return
     ctx.queue_name = old_name
     await queue_service.rename_queue(ctx, new_name)
@@ -216,3 +173,45 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
 
     # Обновляем сообщение для новой очереди
     await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
+
+
+@with_ctx
+@admins_only
+async def edit_t(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    pass
+
+
+@with_ctx
+@admins_only
+async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    """
+    Команда для изменения времени автоудаления очереди.
+    """
+    args = context.args
+    if len(args) < 2:
+        await delete_message_later(context, ctx, "Использование: /set_expire_time <Очередь> <часы>")
+        return
+
+    try:
+        hours = int(context.args[-1])
+        # Валидация
+        if hours < 1:
+            await delete_message_later(context, ctx, "Время должно быть не менее 1 часа.")
+            return
+
+        queue_name = " ".join(context.args[:-1])
+        ctx.queue_name = queue_name
+        queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+        if queue_name not in queues:
+            await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
+            return
+
+        # Устанавливаем новое время
+        await reschedule_queue_expiration(context, ctx, hours)
+
+        await delete_message_later(
+            context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} часов."
+        )
+
+    except ValueError:
+        await delete_message_later(context, ctx, "Неверный формат числа. Введите целое число часов.")

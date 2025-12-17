@@ -1,4 +1,3 @@
-from asyncio import create_task
 from datetime import timedelta, timezone
 
 from telegram import Update
@@ -7,7 +6,7 @@ from telegram.ext import ContextTypes
 from app.commands.admin import admins_only
 from app.queues.models import ActionContext
 from app.services.mongo_storage import log_collection
-from app.utils.utils import delete_later, safe_delete, with_ctx
+from app.utils.utils import delete_message_later, safe_delete, with_ctx
 
 MAX_LEN = 4000  # чуть меньше лимита 4096
 
@@ -71,8 +70,7 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
 
     # 📨 Отправляем по очереди
     for part in parts:
-        msg = await context.bot.send_message(ctx.chat_id, part or "Логи пусты.", message_thread_id=ctx.thread_id)
-        create_task(delete_later(context, ctx, msg.message_id, 60))
+        await delete_message_later(context, ctx, part or "Логи пусты.", 60)
 
 
 @with_ctx
@@ -92,5 +90,4 @@ async def get_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
 
     # 📨 Отправляем по очереди
     for part in parts:
-        msg = await context.bot.send_message(ctx.chat_id, part or "jobs пусты.", message_thread_id=ctx.thread_id)
-        create_task(delete_later(context, ctx, msg.message_id, 60))
+        await delete_message_later(context, ctx, part or "jobs пусты.", 60)
