@@ -13,7 +13,9 @@ class QueueDomainService:
     @staticmethod
     def generate_queue_name(queues: Dict, base: str = "Очередь") -> str:
         i = 1
-        while queues.get(f"{base} {i}", {"queue": []})["queue"]:
+
+        queues = {queue["name"]: queue["members"] for queue in queues.values()}
+        while queues.get(f"{base} {i}", []):
             i += 1
         return f"{base} {i}"
 
@@ -78,21 +80,16 @@ class QueueDomainService:
         if queue is None:
             return InsertResult(None, None, None, None)
 
-        # normalize desired_pos
-        if queue is None:
-            return InsertResult(None, None, None, None)
-
-        if desired_pos is None:
-            desired_pos = len(queue)
-
-        if desired_pos < 0 or desired_pos > len(queue):
-            raise InvalidPositionError(f"desired position {desired_pos + 1} out of bounds")
-
         old_position = None
         idx = next((i for i, user in enumerate(queue) if QueueDomainService._display_name(user) == user_name), None)
         if idx is not None:
             old_position = idx + 1
             queue.pop(idx)
+
+        if desired_pos is None:
+            desired_pos = len(queue)
+
+        desired_pos = max(0, min(desired_pos, len(queue)))
 
         queue.insert(desired_pos, {"user_id": None, "display_name": user_name})
         return InsertResult(user_name, desired_pos + 1, queue, old_position)
@@ -104,8 +101,6 @@ class QueueDomainService:
 
         if pos1 == pos2:
             raise InvalidPositionError("Positions are equal")
-
-        print(queue, pos1, pos2)
 
         user1, user2 = queue[pos1], queue[pos2]
         queue[pos1], queue[pos2] = user2, user1
@@ -124,7 +119,6 @@ class QueueDomainService:
         # find by display_name
         pos1 = next((i for i, it in enumerate(queue) if QueueDomainService._display_name(it) == name1), None)
         pos2 = next((i for i, it in enumerate(queue) if QueueDomainService._display_name(it) == name2), None)
-        print(f"replace_by_names: found positions {pos1}, {pos2} for names '{name1}', '{name2}'")
         if pos1 is None or pos2 is None:
             raise UserNotFoundError("One or both names not found")
 

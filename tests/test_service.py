@@ -272,22 +272,22 @@ class TestGetQueueIndex:
     """Тесты получения индекса очереди."""
 
     @pytest.mark.asyncio
-    async def test_get_queue_index(self, service, mock_repo):
+    async def test_get_322(self, service, mock_repo):
         """Получить индекс очереди."""
         mock_repo.get_all_queues.return_value = {
             "Queue 1": {"queue": []},
             "Queue 2": {"queue": []},
             "Queue 3": {"queue": []},
         }
-        index = await service.get_queue_index(123, "Queue 2")
+        index = await service.get_322(123, "Queue 2")
         assert index == 1
 
     @pytest.mark.asyncio
-    async def test_get_queue_index_not_found(self, service, mock_repo):
+    async def test_get_322_not_found(self, service, mock_repo):
         """Очередь не найдена."""
         mock_repo.get_all_queues.return_value = {"Queue 1": {"queue": []}}
         with pytest.raises(QueueNotFoundError):
-            await service.get_queue_index(123, "Unknown")
+            await service.get_322(123, "Unknown")
 
 
 class TestRenameQueue:

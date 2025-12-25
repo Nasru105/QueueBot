@@ -59,10 +59,10 @@ class QueueAutoCleanupService:
         ctx: ActionContext = job.data["ctx"]
         ctx.actor = "queue_expire_job"
 
-        last_modified = await self.queue_service.repo.get_last_modified_time(ctx.chat_id, ctx.queue_name)
+        last_modified = await self.queue_service.repo.get_last_modified_time(ctx.chat_id, ctx.queue_id)
         last_modified = datetime.strptime(last_modified, "%d.%m.%Y %H:%M:%S")
 
-        now = datetime.strptime(await get_now_formatted_time(), "%d.%m.%Y %H:%M:%S")
+        now = await get_now_formatted_time()
 
         if now - last_modified < timedelta(hours=1):
             # Обновляем TTL, но не трогаем очередь
@@ -70,7 +70,7 @@ class QueueAutoCleanupService:
             await self.schedule_expiration(context, ctx, expires_in_seconds=3600)
             return
 
-        last_msg_id = await self.queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
+        last_msg_id = await self.queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
         if last_msg_id:
             await safe_delete(context.bot, ctx, last_msg_id)
 

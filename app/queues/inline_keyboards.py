@@ -4,13 +4,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def queue_keyboard(queue_index: int):
+def queue_keyboard(queue_id: int):
     # Убедимся, что индекс неотрицательный
-    queue_index = max(0, queue_index)
     keyboard = [
         [
-            InlineKeyboardButton("🔼 Встать", callback_data=f"queue|{queue_index}|join"),
-            InlineKeyboardButton("🔽 Выйти", callback_data=f"queue|{queue_index}|leave"),
+            InlineKeyboardButton("🔼 Встать", callback_data=f"queue|{queue_id}|join"),
+            InlineKeyboardButton("🔽 Выйти", callback_data=f"queue|{queue_id}|leave"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)

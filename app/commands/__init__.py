@@ -18,7 +18,7 @@ from .queue import chat_nickname, create, global_nickname, help_commands, queues
 def register_handlers(app: Application):
     app.add_handler(CommandHandler("start", start_help))
     app.add_handler(CommandHandler("help", start_help))
-    app.add_handler(CommandHandler("help_commands", help_commands))
+    app.add_handler(CommandHandler("commands", help_commands))
 
     app.add_handler(CommandHandler("create", create))
     app.add_handler(CommandHandler("queues", queues))

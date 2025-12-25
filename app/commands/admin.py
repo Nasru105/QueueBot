@@ -40,14 +40,15 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
         return
 
     queue_name = " ".join(context.args)
-    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    ctx.queue_name = queue_name
-    if queue_name not in queues:
+    queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
+    ctx.queue_name = queue["name"]
+    ctx.queue_id = queue["id"]
+    if not queue:
         await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
         return
 
     # Удаляем сообщение очереди
-    last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, queue_name)
+    last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
     if last_id:
         await safe_delete(context.bot, ctx, last_id)
 
@@ -67,9 +68,10 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await queue_service.repo.clear_list_message_id(ctx.chat_id)
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    for queue_name in list(queues.keys()):
-        ctx.queue_name = queue_name
-        last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, queue_name)
+    for queue in queues.values():
+        ctx.queue_name = queue["name"]
+        ctx.queue_id = queue["id"]
+        last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
         if last_id:
             await safe_delete(context.bot, ctx, last_id)
         await queue_service.delete_queue(ctx)
@@ -84,7 +86,8 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         await delete_message_later(context, ctx, "Использование: \n /insert <Имя очереди> <Имя пользователя> [позиция]")
         return
 
-    queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+    queue_names = [queue["name"] for queue in queues.values()]
     queue_name, rest = parse_queue_args(args, queue_names)
     ctx.queue_name = queue_name
 
@@ -93,7 +96,6 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         return
 
     await queue_service.insert_into_queue(ctx, rest)
-
     await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
 
 
@@ -107,7 +109,8 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         )
         return
 
-    queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+    queue_names = [queue["name"] for queue in queues.values()]
     queue_name, rest = parse_queue_args(args, queue_names)
     ctx.queue_name = queue_name
 
@@ -133,10 +136,8 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
         )
         return
 
-    # --- 1. Парсим имя очереди ---
-    queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
-    queue_name = None
-
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+    queue_names = [queue["name"] for queue in queues.values()]
     queue_name, rest_names = parse_queue_args(args, queue_names)
     ctx.queue_name = queue_name
 
@@ -156,9 +157,11 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
         await delete_message_later(context, ctx, "Использование: /rename <Старое имя> <Новое имя>")
         return
 
-    queue_names = list((await queue_service.repo.get_all_queues(ctx.chat_id)).keys())
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+    queue_names = [queue["name"] for queue in queues.values()]
     old_name, rest = parse_queue_args(args, queue_names)
     new_name = " ".join(rest).strip()
+    ctx.queue_name = old_name
 
     if not old_name or not new_name:
         await delete_message_later(context, ctx, "Укажите старое и новое имя очереди.")
@@ -167,11 +170,10 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     if new_name in queue_names:
         await delete_message_later(context, ctx, "Очередь с новым именем уже существует.")
         return
-    ctx.queue_name = old_name
+
     await queue_service.rename_queue(ctx, new_name)
     ctx.queue_name = new_name
 
-    # Обновляем сообщение для новой очереди
     await queue_service.update_queue_message(ctx, query_or_update=update, context=context)
 
 
@@ -200,11 +202,14 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
             return
 
         queue_name = " ".join(context.args[:-1])
+        queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
         ctx.queue_name = queue_name
-        queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-        if queue_name not in queues:
-            await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
+
+        if not queue:
+            await delete_message_later(context, ctx, "Очередь не найдена.")
             return
+
+        ctx.queue_id = queue["id"]
 
         # Устанавливаем новое время
         await reschedule_queue_expiration(context, ctx, hours)

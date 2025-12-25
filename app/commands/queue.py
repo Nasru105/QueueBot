@@ -81,7 +81,6 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     Создаёт новую очередь.
     Имя: из аргументов или автогенерация.
     """
-
     flags = {"-h": None}
 
     args_parts, parsed_flags = parse_flags_args(context.args, flags)
@@ -93,9 +92,10 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         queue_name = await queue_service.generate_queue_name(ctx.chat_id)
 
     ctx.queue_name = queue_name
+    queue_id = await queue_service.create_queue(ctx)
+    ctx.queue_id = queue_id
 
-    queue_name = await queue_service.create_queue(ctx)
-    if not queue_name:
+    if not queue_id:
         await delete_message_later(context, ctx, f"Очередь с именем {ctx.queue_name} уже существет")
     await queue_service.send_queue_message(ctx, context)
     await schedule_queue_expiration(context, ctx, int(parsed_flags["-h"]) * 3600 if parsed_flags["-h"] else 86400)
@@ -114,14 +114,13 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         await safe_delete(context.bot, ctx, last_queues_id)
 
     # Получаем очереди
-    queues_dict = await queue_service.repo.get_all_queues(ctx.chat_id)
-    queue_names = list(queues_dict.keys())
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
 
-    if queue_names:
+    if queues:
         sent = await context.bot.send_message(
             chat_id=ctx.chat_id,
             text="Выберите очередь:",
-            reply_markup=await queues_menu_keyboard(queue_names),
+            reply_markup=await queues_menu_keyboard(queues),
             message_thread_id=ctx.thread_id,
             disable_notification=True,
         )

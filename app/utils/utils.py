@@ -38,12 +38,12 @@ def with_ctx(func):
 
 
 # helper to check presence by user_id
-async def has_user(queue, user_id, display_name):
-    for item in queue:
-        if item.get("user_id") == user_id:
+async def has_user(members, user_id, display_name):
+    for user in members:
+        if user.get("user_id") == user_id:
             return True
-        elif item.get("display_name") == display_name:
-            item["user_id"] = user_id
+        elif user.get("display_name") == display_name:
+            user["user_id"] = user_id
             return True
     return False
 
@@ -103,7 +103,7 @@ def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str],
     return None, []
 
 
-def parse_users_names(args: List[str], queue: List[dict]) -> Tuple[Optional[str], Optional[str]]:
+def parse_users_names(args: List[str], members: List[dict]) -> Tuple[Optional[str], Optional[str]]:
     """
     Ищет два имени в очереди из аргументов.
     Возвращает (имя1, имя2) или (None, None)
@@ -112,7 +112,7 @@ def parse_users_names(args: List[str], queue: List[dict]) -> Tuple[Optional[str]
         return None, None
 
     # Извлекаем все имена из очереди
-    queue_names = [user["display_name"] for user in queue]
+    queue_names = [user["display_name"] for user in members]
 
     # Пробуем найти два разных имени
     for i in range(len(args) - 1):

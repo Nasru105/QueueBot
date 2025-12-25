@@ -1,15 +1,15 @@
 import logging
 from typing import List
 
-from telegram.ext import ContextTypes, ExtBot
+from telegram import User
+from telegram.ext import ContextTypes
 
 from app.queues.queue_repository import QueueRepository
-from app.queues_menu.inline_keyboards import queues_menu_keyboard
 from app.services.logger import QueueLogger
-from app.utils.utils import parse_users_names, safe_delete
+from app.utils.utils import parse_users_names
 
 from .domain import QueueDomainService
-from .errors import InvalidPositionError, QueueError, QueueNotFoundError, UserNotFoundError
+from .errors import InvalidPositionError, QueueError, UserNotFoundError
 from .message_service import QueueMessageService
 from .models import ActionContext, InsertResult, RemoveResult, ReplaceResult
 from .presenter import QueuePresenter
@@ -33,74 +33,34 @@ class QueueFacadeService:
     # ------ queue management (thin orchestrations) ------
     async def create_queue(self, ctx: ActionContext):
         try:
-            await self.repo.create_queue(ctx.chat_id, ctx.chat_title, ctx.queue_name)
+            queue_id = await self.repo.create_queue(ctx.chat_id, ctx.chat_title, ctx.queue_name)
+            ctx.queue_id = queue_id
             self.logger.log(ctx, "create queue")
-            return ctx.queue_name
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
-            return
+        return queue_id
 
     async def delete_queue(self, ctx: ActionContext):
         try:
-            await self.repo.delete_queue(ctx.chat_id, ctx.queue_name)
+            await self.repo.delete_queue(ctx.chat_id, ctx.queue_id)
             self.logger.log(ctx, "delete queue")
 
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def join_to_queue(self, ctx: ActionContext, user) -> int:
-        # repo should implement add_to_queue (atomic on DB side if possible)
+    async def join_to_queue(self, ctx: ActionContext, user: User) -> int:
         try:
-            # If user is a string (tests, admin insert), use it as display_name
-            if isinstance(user, str):
-                display_name = user
-                try:
-                    # try calling new signature on repo (some mocks may accept any args)
-                    position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, None, display_name)
-                except TypeError:
-                    # fallback for mocks or legacy repos that accept (chat_id, queue_name, display_name)
-                    position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, display_name)
-                if position:
-                    self.logger.joined(ctx, display_name, position)
-                return position
-
             display_name = await self.user_service.get_user_display_name(user, ctx.chat_id)
-            # Try bind the user id to an existing item with matching display_name
-            try:
-                idx = await self.repo.attach_user_id_by_display_name(ctx.chat_id, ctx.queue_name, display_name, user.id)
-            except Exception:
-                idx = None
-
-            if idx is not None:
-                # updated existing entry — return position
-                position = idx + 1
-                if position:
-                    self.logger.joined(ctx, display_name, position)
-                return position
-            position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_name, user.id, display_name)
+            position = await self.repo.add_to_queue(ctx.chat_id, ctx.queue_id, user.id, display_name)
             if position:
                 self.logger.joined(ctx, display_name, position)
             return position
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def leave_from_queue(self, ctx: ActionContext, user) -> int:
+    async def leave_from_queue(self, ctx: ActionContext, user: User) -> int:
         try:
-            # backward compatibility: user may be display_name string
-            if isinstance(user, str):
-                try:
-                    position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user.id)
-                except TypeError:
-                    position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, None)
-                if position:
-                    self.logger.leaved(ctx, user, position)
-                return position
-
-            try:
-                position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user.id)
-            except TypeError:
-                position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_name, user)
-
+            position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_id, user.id)
             if position:
                 display_name = await self.user_service.get_user_display_name(user, ctx.chat_id)
                 self.logger.leaved(ctx, display_name, position)
@@ -111,7 +71,8 @@ class QueueFacadeService:
     # ------ business operations (using domain) ------
     async def remove_from_queue(self, ctx: ActionContext, args: List[str]) -> RemoveResult:
         try:
-            queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_name)
+            queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
+            ctx.queue_id = queue["id"]
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return RemoveResult(None, None, None)
@@ -120,7 +81,7 @@ class QueueFacadeService:
             return RemoveResult(None, None, None)
 
         try:
-            res = self.domain.remove_by_pos_or_name(queue, args)
+            res = self.domain.remove_by_pos_or_name(queue["members"], args)
         except InvalidPositionError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return RemoveResult(None, None, None)
@@ -130,7 +91,7 @@ class QueueFacadeService:
 
         if res.removed_name:
             try:
-                await self.repo.update_queue(ctx.chat_id, ctx.queue_name, res.updated_queue)
+                await self.repo.update_queue(ctx.chat_id, ctx.queue_id, res.updated_queue)
                 self.logger.removed(ctx, res.removed_name, res.position)
             except QueueError as ex:
                 self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
@@ -138,16 +99,12 @@ class QueueFacadeService:
 
     async def insert_into_queue(self, ctx: ActionContext, args: List[str]) -> InsertResult:
         try:
-            queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_name)
+            queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
+            ctx.queue_id = queue["id"]
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return InsertResult(None, None, None, None)
 
-        if queue is None:
-            return InsertResult(None, None, None, None)
-
-        # parse args: if last is int -> position
-        desired_pos = None
         try:
             desired_pos = int(args[-1]) - 1
             user_name = " ".join(args[:-1]).strip()
@@ -156,7 +113,7 @@ class QueueFacadeService:
             desired_pos = None
 
         try:
-            res = self.domain.insert_at_position(queue, user_name, desired_pos)
+            res = self.domain.insert_at_position(queue["members"], user_name, desired_pos)
         except InvalidPositionError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return InsertResult(None, None, None, None)
@@ -166,7 +123,7 @@ class QueueFacadeService:
 
         if res.user_name:
             try:
-                await self.repo.update_queue(ctx.chat_id, ctx.queue_name, res.updated_queue)
+                await self.repo.update_queue(ctx.chat_id, ctx.queue_id, res.updated_queue)
                 if res.old_position:
                     # old_position already 1-based
                     self.logger.removed(ctx, user_name, res.old_position)
@@ -177,7 +134,9 @@ class QueueFacadeService:
 
     async def replace_users_queue(self, ctx: ActionContext, args: List[str]) -> ReplaceResult:
         try:
-            queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_name)
+            queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
+            members = queue.get("members", [])
+            ctx.queue_id = queue["id"]
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return ReplaceResult(None, None, None, None, None, None)
@@ -195,10 +154,10 @@ class QueueFacadeService:
 
         try:
             if mode == "positions":
-                result: ReplaceResult = QueueDomainService.replace_by_positions(queue, pos1, pos2, ctx.queue_name)
+                result: ReplaceResult = QueueDomainService.replace_by_positions(members, pos1, pos2, ctx.queue_name)
             else:
-                name1, name2 = parse_users_names(args, queue)
-                result: ReplaceResult = QueueDomainService.replace_by_names(queue, name1, name2, ctx.queue_name)
+                name1, name2 = parse_users_names(args, members)
+                result: ReplaceResult = QueueDomainService.replace_by_names(members, name1, name2, ctx.queue_name)
         except (InvalidPositionError, UserNotFoundError) as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return ReplaceResult(ctx.queue_name, None, None, None, None, None)
@@ -207,7 +166,7 @@ class QueueFacadeService:
             return ReplaceResult(ctx.queue_name, None, None, None, None, None)
 
         try:
-            await self.repo.update_queue(ctx.chat_id, ctx.queue_name, result.updated_queue)
+            await self.repo.update_queue(ctx.chat_id, ctx.queue_id, result.updated_queue)
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return result
@@ -217,10 +176,9 @@ class QueueFacadeService:
 
     async def send_queue_message(self, ctx: ActionContext, context):
         try:
-            queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_name) or []
-            text = self.presenter.format_queue_text(ctx.queue_name, queue)
-            queue_index = await self.get_queue_index(ctx.chat_id, ctx.queue_name)
-            keyboard = self.presenter.build_keyboard(queue_index)
+            queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_id)
+            text = self.presenter.format_queue_text(ctx.queue_name, queue["members"])
+            keyboard = self.presenter.build_keyboard(ctx.queue_id)
             return await self.message_service.send_queue_message(ctx, text, keyboard, context)
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
@@ -229,24 +187,19 @@ class QueueFacadeService:
         self, ctx: ActionContext, query_or_update=None, context: ContextTypes.DEFAULT_TYPE = None
     ):
         try:
-            queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_name) or []
-            text = self.presenter.format_queue_text(ctx.queue_name, queue)
-            queue_index = await self.get_queue_index(ctx.chat_id, ctx.queue_name)
-            keyboard = self.presenter.build_keyboard(queue_index)
+            if ctx.queue_id:
+                queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_id)
+            else:
+                queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
+            ctx.queue_id = queue["id"]
+            ctx.queue_name = queue["name"]
+            text = self.presenter.format_queue_text(ctx.queue_name, queue["members"])
+            keyboard = self.presenter.build_keyboard(ctx.queue_id)
             return await self.message_service.edit_queue_message(
                 ctx, text, keyboard, query_or_update=query_or_update, context=context
             )
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
-
-    async def get_queue_index(self, chat_id: int, queue_name: str) -> int:
-        try:
-            queues = await self.repo.get_all_queues(chat_id)
-            return list(queues.keys()).index(queue_name)
-        except ValueError:
-            raise QueueNotFoundError(f"queue '{queue_name}' not found")
-        except QueueError:
-            raise
 
     async def rename_queue(self, ctx: ActionContext, new_name: str):
         try:
@@ -286,18 +239,19 @@ class QueueFacadeService:
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def mass_update_existing_queues(self, bot: ExtBot[None], ctx, message_list_id):
-        queues = await self.repo.get_all_queues(ctx.chat_id)
+    # async def mass_update_existing_queues(self, bot: ExtBot[None], ctx, message_list_id):
+    #     queues = await self.repo.get_all_queues(ctx.chat_id)
 
-        if not queues:
-            await safe_delete(bot, ctx, message_list_id)
-        try:
-            await self.message_service.mass_update(bot, ctx, queues, self.presenter)
-            if message_list_id:
-                new_keyboard = await queues_menu_keyboard(list(queues.keys()))
-                await bot.edit_message_text(
-                    text="Выберите очередь:", chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
-                )
+    #     if not queues:
+    #         await safe_delete(bot, ctx, message_list_id)
+    #     try:
+    #         await self.message_service.mass_update(bot, ctx, queues, self.presenter)
+    #         if message_list_id:
+    #             names = [v["name"] if isinstance(v, dict) and "name" in v else k for k, v in queues.items()]
+    #             new_keyboard = await queues_menu_keyboard(names)
+    #             await bot.edit_message_text(
+    #                 text="Выберите очередь:", chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
+    #             )
 
-        except QueueError as ex:
-            self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+    #     except QueueError as ex:
+    #         self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)

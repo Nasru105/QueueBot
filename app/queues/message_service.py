@@ -1,11 +1,10 @@
 import logging
-from typing import Dict, Optional
+from typing import Optional
 
 from telegram.error import BadRequest
-from telegram.ext import ContextTypes, ExtBot
+from telegram.ext import ContextTypes
 
 from app.queues.models import ActionContext
-from app.queues.presenter import QueuePresenter
 from app.queues.queue_repository import QueueRepository
 from app.services.logger import QueueLogger
 from app.utils.utils import safe_delete
@@ -23,13 +22,19 @@ class QueueMessageService:
         self.repo: QueueRepository = repo
         self.logger = bot_logger
 
+    async def hide_queues_list_message(self, context, ctx):
+        last_queues_id = await self.repo.get_list_message_id(ctx.chat_id)
+        if last_queues_id:
+            await safe_delete(context.bot, ctx, last_queues_id)
+            await self.repo.clear_list_message_id(ctx.chat_id)
+
     async def send_queue_message(self, ctx: ActionContext, text: str, keyboard, context: ContextTypes.DEFAULT_TYPE):
         """
         Отправить сообщение о очереди: при наличии старого — удалить.
         Сохраняет message_id в repo.
         """
         try:
-            last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
+            last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
             if last_id:
                 await safe_delete(context.bot, ctx, last_id)
 
@@ -41,7 +46,7 @@ class QueueMessageService:
                 message_thread_id=ctx.thread_id,
                 disable_notification=True,
             )
-            await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
+            await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_id, sent.message_id)
             return sent.message_id
         except Exception as ex:
             self.logger.log(
@@ -66,11 +71,10 @@ class QueueMessageService:
         msg_id = None
         try:
             if hasattr(query_or_update, "edit_message_text"):
-                # inline query/ callback_query or update with edit method
                 msg_id = query_or_update.message.message_id
                 await query_or_update.edit_message_text(text=text, parse_mode="MarkdownV2", reply_markup=keyboard)
             else:
-                last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_name)
+                last_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
                 if last_id and context:
                     msg_id = last_id
                     await context.bot.edit_message_text(
@@ -100,45 +104,45 @@ class QueueMessageService:
                     reply_markup=keyboard,
                     disable_notification=True,
                 )
-                await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, sent.message_id)
+                await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_id, sent.message_id)
                 return sent.message_id
             raise MessageServiceError(ex)
 
         if msg_id is not None:
-            await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_name, msg_id)
+            await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_id, msg_id)
         return msg_id
 
-    async def mass_update(self, bot: ExtBot, ctx: ActionContext, queues: Dict, presenter: QueuePresenter):
-        """
-        Обновить все существующие сообщения очередей (в фоновой задаче).
-        queues: mapping name -> data (from repo.get_all_queues)
-        presenter: объект QueuePresenter
-        """
-        for queue_index, (queue_name, queue_data) in enumerate(queues.items()):
-            message_id = queue_data.get("last_queue_message_id")
-            if not message_id:
-                continue
-            try:
-                text = presenter.format_queue_text(queue_name, queue_data.get("queue", []))
-                keyboard = presenter.build_keyboard(queue_index)
-                await bot.edit_message_text(
-                    chat_id=ctx.chat_id,
-                    message_id=message_id,
-                    text=text,
-                    parse_mode="MarkdownV2",
-                    reply_markup=keyboard,
-                )
-            except BadRequest as e:
-                if "not modified" in str(e).lower():
-                    continue
-                else:
-                    raise MessageServiceError(e)
-            except Exception as ex:
-                # Log per-queue failures and continue
-                self.logger.log(
-                    ctx.chat_title,
-                    queue_name,
-                    ctx.actor,
-                    f"mass-update failed: {type(ex).__name__}: {ex}",
-                    level=logging.ERROR,
-                )
+    # async def mass_update(self, bot: ExtBot, ctx: ActionContext, queues: Dict, presenter: QueuePresenter):
+    #     """
+    #     Обновить все существующие сообщения очередей (в фоновой задаче).
+    #     queues: mapping name -> data (from repo.get_all_queues)
+    #     presenter: объект QueuePresenter
+    #     """
+    #     for 322, (queue_name, queue_data) in enumerate(queues.items()):
+    #         message_id = queue_data.get("last_queue_message_id")
+    #         if not message_id:
+    #             continue
+    #         try:
+    #             text = presenter.format_queue_text(queue_name, queue_data.get("queue", []))
+    #             keyboard = presenter.build_keyboard(322)
+    #             await bot.edit_message_text(
+    #                 chat_id=ctx.chat_id,
+    #                 message_id=message_id,
+    #                 text=text,
+    #                 parse_mode="MarkdownV2",
+    #                 reply_markup=keyboard,
+    #             )
+    #         except BadRequest as e:
+    #             if "not modified" in str(e).lower():
+    #                 continue
+    #             else:
+    #                 raise MessageServiceError(e)
+    #         except Exception as ex:
+    #             # Log per-queue failures and continue
+    #             self.logger.log(
+    #                 ctx.chat_title,
+    #                 queue_name,
+    #                 ctx.actor,
+    #                 f"mass-update failed: {type(ex).__name__}: {ex}",
+    #                 level=logging.ERROR,
+    #             )
