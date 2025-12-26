@@ -41,11 +41,11 @@ async def run_bot() -> None:
     attempt = 0
     while attempt < MAX_RETRIES:
         try:
+            logger.info("Запуск бота...")
             await ensure_indexes()
             app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
             await set_commands(app)
             register_handlers(app)
-            logger.info("Запуск бота...")
 
             await app.initialize()
             await app.start()
@@ -53,6 +53,16 @@ async def run_bot() -> None:
             allowed_updates = ["message", "callback_query", "inline_query", "my_chat_member", "chat_member"]
             await app.updater.start_polling(allowed_updates=allowed_updates)
 
+            # Восстанавливаем планировщик автo-удаления из БД
+            try:
+                from app.handlers.scheduler import auto_cleanup_service
+
+                logger.info("Восстанавление авто-удалений из БД...")
+                await auto_cleanup_service.restore_all_expirations(app)
+            except Exception as e:
+                logger.warning(f"Не удалось восстановить авто-удаления: {e}")
+
+            logger.info("Запуск бота завершён успешно.")
             # Держим бота живым
             stop_event = asyncio.Event()
             await stop_event.wait()

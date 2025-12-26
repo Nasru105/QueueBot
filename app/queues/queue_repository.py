@@ -1,10 +1,11 @@
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from telegram import User
 
 from app.services.mongo_storage import queue_collection, user_collection
-from app.utils.utils import get_now_formatted_time, strip_user_full_name
+from app.utils.utils import get_now, strip_user_full_name
 
 from .errors import (
     ChatNotFoundError,
@@ -66,7 +67,7 @@ class QueueRepository:
             raise UserAlreadyExistsError(f"user {user_id} already in queue")
 
         queue.append({"user_id": user_id, "display_name": display_name})
-        queues[queue_id]["last_modified"] = await get_now_formatted_time()
+        queues[queue_id]["last_modified"] = await get_now()
         await self.update_chat(chat_id, {"queues": queues})
         return len(queue)
 
@@ -109,7 +110,7 @@ class QueueRepository:
 
         position = idx + 1
         members.pop(idx)
-        queues[queue_id]["last_modified"] = await get_now_formatted_time()
+        queues[queue_id]["last_modified"] = await get_now()
         await self.update_chat(chat_id, {"queues": queues})
         return position
 
@@ -158,7 +159,7 @@ class QueueRepository:
             "name": queue_name,
             "members": [],
             "last_queue_message_id": None,
-            "last_modified": await get_now_formatted_time(),
+            "last_modified": await get_now(),
         }
 
         # атомарное обновление
@@ -233,7 +234,7 @@ class QueueRepository:
         if queue_id in queues:
             # expect new_queue to be list of dicts
             queues[queue_id]["members"] = new_members
-            queues[queue_id]["last_modified"] = await get_now_formatted_time()
+            queues[queue_id]["last_modified"] = await get_now()
             await self.update_chat(chat_id, {"queues": queues})
         else:
             raise QueueNotFoundError(f"queue '{queue_id}' not found in chat {chat_id}")
@@ -265,7 +266,8 @@ class QueueRepository:
     #     else:
     #         raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
 
-    async def get_last_modified_time(self, chat_id: int, queue_id: str) -> Optional[int]:
+    async def get_last_modified_time(self, chat_id: int, queue_id: str) -> Optional[datetime]:
+        """Возвращает datetime или None. Поддерживает старый строковый формат."""
         doc = await self.get_chat(chat_id)
         if not doc:
             raise ChatNotFoundError(f"chat {chat_id} not found")
@@ -324,6 +326,51 @@ class QueueRepository:
     async def clear_list_message_id(self, chat_id: int):
         await self.update_chat(chat_id, {"last_list_message_id": None})
 
+    async def get_queue_expiration(self, chat_id: int, queue_id: str) -> Optional[datetime]:
+        """Возвращает datetime expiration или None. Поддерживает старый строковый формат."""
+        queue = await self.get_queue(chat_id, queue_id)
+        return queue.get("expiration")
+
+    async def set_queue_expiration(self, chat_id: int, queue_id: str, expiration):
+        """Устанавливает время автоудаления очереди.
+
+        Параметр `expiration` может быть `datetime` или строкой в старом формате — метод сохранит datetime в БД.
+        """
+        doc = await self.get_chat(chat_id)
+        if not doc:
+            raise ChatNotFoundError(f"chat {chat_id} not found")
+
+        queues = doc.get("queues", {})
+        if queue_id in queues:
+            queues[queue_id]["expiration"] = expiration
+            await self.update_chat(chat_id, {"queues": queues})
+        else:
+            raise QueueNotFoundError(f"queue ({queue_id}) not found in chat {chat_id}")
+
+    async def clear_queue_expiration(self, chat_id: int, queue_id: str):
+        """Удаляет поле expiration у очереди.
+
+        Тихо ничего не делает, если документ чата или очередь отсутствуют —
+        это позволяет вызывать метод после удаления очереди.
+        """
+        doc = await self.get_chat(chat_id)
+        if not doc:
+            # чат уже удалён — ничего делать не нужно
+            return
+
+        queues = doc.get("queues", {})
+        if queue_id in queues and queues[queue_id].get("expiration"):
+            queues[queue_id].pop("expiration", None)
+            await self.update_chat(chat_id, {"queues": queues})
+
+    async def get_all_chats_with_queues(self) -> list[dict]:
+        """Возвращает список документов: {'chat_id': int, 'chat_title': str, 'queues': {...}}"""
+        cur = queue_collection.find({}, {"chat_id": 1, "queues": 1, "chat_title": 1})
+        return [
+            {"chat_id": doc.get("chat_id"), "chat_title": doc.get("chat_title"), "queues": doc.get("queues", {})}
+            async for doc in cur
+        ]
+
     async def rename_queue(self, chat_id: int, old_name: str, new_name: str):
         doc = await self.get_chat(chat_id)
         if not doc:
@@ -347,7 +394,7 @@ class QueueRepository:
                 "name": new_name,
                 "members": [],
                 "last_queue_message_id": None,
-                "last_modified": await get_now_formatted_time(),
+                "last_modified": await get_now(),
             }
             queues[queue_id] = new_queue
             await self.update_chat(chat_id, {"queues": queues})

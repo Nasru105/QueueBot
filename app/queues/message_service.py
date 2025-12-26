@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -49,18 +48,10 @@ class QueueMessageService:
             await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_id, sent.message_id)
             return sent.message_id
         except Exception as ex:
-            self.logger.log(
-                ctx.chat_title,
-                ctx.queue_name,
-                ctx.actor,
-                f"send failed: {type(ex).__name__}: {ex}",
-                level=logging.ERROR,
-            )
+            self.logger.log(ctx, f"send failed: {type(ex).__name__}: {ex}", level=logging.ERROR)
             raise MessageServiceError(ex)
 
-    async def edit_queue_message(
-        self, ctx, text: str, keyboard, query_or_update=None, context: Optional[ContextTypes.DEFAULT_TYPE] = None
-    ):
+    async def edit_queue_message(self, ctx, text: str, keyboard, query_or_update, context: ContextTypes.DEFAULT_TYPE):
         """
         Попытаться отредактировать сообщение тремя способами:
         1) используем query_or_update.edit_message_text, если есть
@@ -95,7 +86,7 @@ class QueueMessageService:
             raise MessageServiceError(e)
         except Exception as ex:
             # log and fallback to sending new message (if bot context available)
-            self.logger.log(ctx.chat_title, ctx.queue_name, ctx.actor, f"edit failed: {ex}", level=logging.ERROR)
+            self.logger.log(ctx, f"edit failed: {ex}", level=logging.ERROR)
             if context:
                 sent = await context.bot.send_message(
                     chat_id=ctx.chat_id,

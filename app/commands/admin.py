@@ -204,6 +204,7 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
         queue_name = " ".join(context.args[:-1])
         queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
         ctx.queue_name = queue_name
+        ctx.queue_id = queue["id"]
 
         if not queue:
             await delete_message_later(context, ctx, "Очередь не найдена.")
@@ -215,7 +216,7 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
         await reschedule_queue_expiration(context, ctx, hours)
 
         await delete_message_later(
-            context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} часов."
+            context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} ч."
         )
 
     except ValueError:

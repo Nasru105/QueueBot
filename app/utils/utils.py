@@ -133,6 +133,22 @@ async def is_user_admin(context, chat_id, user_id) -> bool:
         return False
 
 
+async def get_now():
+    # Возвращает datetime объект текущего времени (локальное)
+    return datetime.now()
+
+
+def parse_time_str(s: str) -> datetime:
+    """Парсит строку формата "%d.%m.%Y %H:%M:%S" в datetime.
+
+    Если передан уже datetime — возвращает как есть.
+    """
+    if isinstance(s, datetime):
+        return s
+    # поддержим старый формат хранения
+    return datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+
+
 async def get_now_formatted_time():
     # Текущее время
     now = datetime.now()
