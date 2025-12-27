@@ -15,6 +15,11 @@ class QueuePresenter:
 
     @staticmethod
     def format_queue_text(queue_name: str, members: List) -> str:
+        """Format queue text for display.
+
+        Accepts members as either list of strings (display names) or list of dicts
+        with keys `display_name` and/or `user_id`.
+        """
         name_escaped = escape_markdown(queue_name, version=2)
         if not members:
             return f"*`{name_escaped}`*\n\nОчередь пуста\\."

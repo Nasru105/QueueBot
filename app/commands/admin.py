@@ -4,7 +4,7 @@ from functools import wraps
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.handlers.scheduler import cancel_queue_expiration, reschedule_queue_expiration
+from app.scheduler import cancel_queue_expiration, reschedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.utils.utils import delete_message_later, is_user_admin, parse_queue_args, safe_delete, with_ctx
@@ -52,9 +52,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     if last_id:
         await safe_delete(context.bot, ctx, last_id)
 
-    message_list_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     await queue_service.delete_queue(ctx)
-    await queue_service.mass_update_existing_queues(context.bot, ctx, message_list_id)
     await cancel_queue_expiration(context, ctx)
 
 

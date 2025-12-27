@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.handlers.scheduler import schedule_queue_expiration
+from app.scheduler import schedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.queues_menu.inline_keyboards import queues_menu_keyboard

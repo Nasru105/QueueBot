@@ -37,6 +37,18 @@ def with_ctx(func):
     return wrapper
 
 
+def strip_user_full_name(user: User) -> str:
+    last_name = user.last_name.strip() if user.last_name else ""
+    first_name = user.first_name.strip() if user.first_name else ""
+    return (
+        f"{last_name} {first_name}".strip()
+        if last_name and first_name
+        else user.username
+        if user.username
+        else str(user.id)
+    )
+
+
 # helper to check presence by user_id
 async def has_user(members, user_id, display_name):
     for user in members:
@@ -54,18 +66,6 @@ async def safe_delete(bot, ctx: ActionContext, message_id):
         await bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
         QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
-
-
-def strip_user_full_name(user: User) -> str:
-    last_name = user.last_name.strip() if user.last_name else ""
-    first_name = user.first_name.strip() if user.first_name else ""
-    return (
-        f"{last_name} {first_name}".strip()
-        if last_name and first_name
-        else user.username
-        if user.username
-        else str(user.id)
-    )
 
 
 async def delete_later(context, ctx, message_id, time=5):

@@ -238,20 +238,3 @@ class QueueFacadeService:
             return user_display_name
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
-
-    # async def mass_update_existing_queues(self, bot: ExtBot[None], ctx, message_list_id):
-    #     queues = await self.repo.get_all_queues(ctx.chat_id)
-
-    #     if not queues:
-    #         await safe_delete(bot, ctx, message_list_id)
-    #     try:
-    #         await self.message_service.mass_update(bot, ctx, queues, self.presenter)
-    #         if message_list_id:
-    #             names = [v["name"] if isinstance(v, dict) and "name" in v else k for k, v in queues.items()]
-    #             new_keyboard = await queues_menu_keyboard(names)
-    #             await bot.edit_message_text(
-    #                 text="Выберите очередь:", chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
-    #             )
-
-    #     except QueueError as ex:
-    #         self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
