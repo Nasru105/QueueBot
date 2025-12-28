@@ -1,10 +1,6 @@
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
-from app.commands.reports import get_jobs, get_logs
-from app.queues.router import queue_router
-from app.queues_menu.router import menu_router
-
-from .admin import (
+from app.commands.admin import (
     delete_all_queues,
     delete_queue,
     insert_user,
@@ -13,13 +9,17 @@ from .admin import (
     replace_users,
     set_queue_expiration_time,
 )
-from .queue import chat_nickname, create, global_nickname, help_commands, queues, start_help
+from app.commands.help import commands_list, help_command, start
+from app.commands.queue import chat_nickname, create, global_nickname, queues
+from app.commands.reports import get_jobs, get_logs
+from app.queues.router import queue_router
+from app.queues_menu.router import menu_router
 
 
 def register_handlers(app: Application):
-    app.add_handler(CommandHandler("start", start_help))
-    app.add_handler(CommandHandler("help", start_help))
-    app.add_handler(CommandHandler("commands", help_commands))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("commands", commands_list))
 
     app.add_handler(CommandHandler("create", create))
     app.add_handler(CommandHandler("queues", queues))

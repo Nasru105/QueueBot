@@ -16,6 +16,7 @@ async def handle_queue_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await delete_message_later(context, ctx, "Невозможно выполнить действие.")
         return
     ctx.queue_name = queue["name"]
+
     if action == "refresh":
         await queue_service.send_queue_message(ctx, context)
 

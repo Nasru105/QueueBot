@@ -55,7 +55,7 @@ async def run_bot() -> None:
 
             # Восстанавливаем планировщик автo-удаления из БД
             try:
-                from app.scheduler import auto_cleanup_service
+                from app.handlers.scheduler import auto_cleanup_service
 
                 logger.info("Восстанавление авто-удалений из БД...")
                 await auto_cleanup_service.restore_all_expirations(app)

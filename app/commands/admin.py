@@ -4,9 +4,9 @@ from functools import wraps
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
+from app.handlers.scheduler import cancel_queue_expiration, reschedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
-from app.scheduler import cancel_queue_expiration, reschedule_queue_expiration
 from app.utils.utils import delete_message_later, is_user_admin, parse_queue_args, safe_delete, with_ctx
 
 
@@ -130,7 +130,9 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
     args = context.args
     if len(args) < 3:
         await delete_message_later(
-            context, ctx, "Использование:\n/replace <Очередь> <№1> <№2> или \n/replace <Очередь> <Имя 1> <Имя 2>"
+            context,
+            ctx,
+            "Использование:\n/replace <Очередь> <Позиция 1> <Позиция 2> или \n/replace <Очередь> <Имя 1> <Имя 2>",
         )
         return
 

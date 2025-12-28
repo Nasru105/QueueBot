@@ -157,6 +157,19 @@ async def get_now_formatted_time():
     return formatted_time
 
 
+def split_text(text: str, end="\n──────────────\n", max_len: int = 4000) -> list[str]:
+    """Разбивает текст на части, чтобы не превышать лимит Telegram."""
+    parts = []
+    while len(text) > max_len:
+        cut = text.rfind(end, 0, max_len)  # разрезать по логам
+        if cut == -1:
+            cut = max_len
+        parts.append(text[:cut])
+        text = text[cut:]
+    parts.append(text)
+    return parts
+
+
 def parse_flags_args(args: List[str], target_flags: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:
     """
     Универсальный разбор аргументов:

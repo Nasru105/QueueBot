@@ -6,22 +6,7 @@ from telegram.ext import ContextTypes
 from app.commands.admin import admins_only
 from app.queues.models import ActionContext
 from app.services.mongo_storage import log_collection
-from app.utils.utils import delete_message_later, safe_delete, with_ctx
-
-MAX_LEN = 4000  # чуть меньше лимита 4096
-
-
-def split_text(text: str, max_len: int = MAX_LEN) -> list[str]:
-    """Разбивает текст на части, чтобы не превышать лимит Telegram."""
-    parts = []
-    while len(text) > max_len:
-        cut = text.rfind("\n──────────────\n", 0, max_len)  # разрезать по логам
-        if cut == -1:
-            cut = max_len
-        parts.append(text[:cut])
-        text = text[cut:]
-    parts.append(text)
-    return parts
+from app.utils.utils import delete_message_later, safe_delete, split_text, with_ctx
 
 
 @with_ctx
