@@ -1,7 +1,8 @@
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from app.commands.reports import get_jobs, get_logs
-from app.handlers.handlers import handle_queue_button, menu_router
+from app.queues.router import queue_router
+from app.queues_menu.router import menu_router
 
 from .admin import (
     delete_all_queues,
@@ -37,7 +38,7 @@ def register_handlers(app: Application):
     app.add_handler(CommandHandler("logs", get_logs))
     app.add_handler(CommandHandler("jobs", get_jobs))
 
-    app.add_handler(CallbackQueryHandler(handle_queue_button, pattern=r"^queue\|"))
+    app.add_handler(CallbackQueryHandler(queue_router, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(menu_router, pattern=r"^menu\|"))
     # app.add_error_handler(error_handler)
 

@@ -21,7 +21,7 @@ def with_ctx(func):
             chat_id=chat.id,
             chat_title=chat.title or chat.username or "Личный чат",
             queue_name="",
-            actor=user.username or "Unknown",
+            actor=user.username or strip_user_full_name(user),
             thread_id=update.message.message_thread_id
             if update.message
             else update.callback_query.message.message_thread_id,
@@ -35,6 +35,18 @@ def with_ctx(func):
         return await func(update, context, *args, **kwargs)
 
     return wrapper
+
+
+def strip_user_full_name(user: User) -> str:
+    last_name = user.last_name.strip() if user.last_name else ""
+    first_name = user.first_name.strip() if user.first_name else ""
+    return (
+        f"{last_name} {first_name}".strip()
+        if last_name and first_name
+        else user.username
+        if user.username
+        else str(user.id)
+    )
 
 
 # helper to check presence by user_id
@@ -56,18 +68,6 @@ async def safe_delete(bot, ctx: ActionContext, message_id):
         QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
 
 
-def strip_user_full_name(user: User) -> str:
-    last_name = user.last_name.strip() if user.last_name else ""
-    first_name = user.first_name.strip() if user.first_name else ""
-    return (
-        f"{last_name} {first_name}".strip()
-        if last_name and first_name
-        else user.username
-        if user.username
-        else str(user.id)
-    )
-
-
 async def delete_later(context, ctx, message_id, time=5):
     await asyncio.sleep(time)
     await safe_delete(context.bot, ctx, message_id)
@@ -77,7 +77,8 @@ async def delete_message_later(context, ctx, text, time=5, reply_markup=None):
     error_message = await context.bot.send_message(
         ctx.chat_id, text, message_thread_id=ctx.thread_id, reply_markup=reply_markup, disable_notification=True
     )
-    asyncio.create_task(delete_later(context, ctx, error_message.message_id, time))
+    task = asyncio.create_task(delete_later(context, ctx, error_message.message_id, time))
+    return task
 
 
 # app/queues_service/__init__.py или utils

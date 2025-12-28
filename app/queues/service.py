@@ -22,10 +22,10 @@ class QueueFacadeService:
     Компоненты (repo, presenter, message_service ...) инжектируются через конструктор.
     """
 
-    def __init__(self, repo, keyboard_factory, logger=QueueLogger):
+    def __init__(self, repo, logger=QueueLogger):
         self.repo: QueueRepository = repo
         self.domain = QueueDomainService()
-        self.presenter = QueuePresenter(keyboard_factory)
+        self.presenter = QueuePresenter()
         self.message_service = QueueMessageService(repo, bot_logger=logger)
         self.user_service = UserService(repo)
         self.logger = logger
@@ -178,14 +178,12 @@ class QueueFacadeService:
         try:
             queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_id)
             text = self.presenter.format_queue_text(ctx.queue_name, queue["members"])
-            keyboard = self.presenter.build_keyboard(ctx.queue_id)
+            keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
             return await self.message_service.send_queue_message(ctx, text, keyboard, context)
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
-    async def update_queue_message(
-        self, ctx: ActionContext, query_or_update=None, context: ContextTypes.DEFAULT_TYPE = None
-    ):
+    async def update_queue_message(self, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
         try:
             if ctx.queue_id:
                 queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_id)
@@ -194,10 +192,8 @@ class QueueFacadeService:
             ctx.queue_id = queue["id"]
             ctx.queue_name = queue["name"]
             text = self.presenter.format_queue_text(ctx.queue_name, queue["members"])
-            keyboard = self.presenter.build_keyboard(ctx.queue_id)
-            return await self.message_service.edit_queue_message(
-                ctx, text, keyboard, query_or_update=query_or_update, context=context
-            )
+            keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
+            return await self.message_service.edit_queue_message(context, ctx, text, keyboard)
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
 
@@ -238,20 +234,3 @@ class QueueFacadeService:
             return user_display_name
         except QueueError as ex:
             self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
-
-    # async def mass_update_existing_queues(self, bot: ExtBot[None], ctx, message_list_id):
-    #     queues = await self.repo.get_all_queues(ctx.chat_id)
-
-    #     if not queues:
-    #         await safe_delete(bot, ctx, message_list_id)
-    #     try:
-    #         await self.message_service.mass_update(bot, ctx, queues, self.presenter)
-    #         if message_list_id:
-    #             names = [v["name"] if isinstance(v, dict) and "name" in v else k for k, v in queues.items()]
-    #             new_keyboard = await queues_menu_keyboard(names)
-    #             await bot.edit_message_text(
-    #                 text="Выберите очередь:", chat_id=ctx.chat_id, message_id=message_list_id, reply_markup=new_keyboard
-    #             )
-
-    #     except QueueError as ex:
-    #         self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)

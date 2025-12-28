@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from .errors import InvalidPositionError, UserNotFoundError
 from .models import InsertResult, RemoveResult, ReplaceResult
@@ -20,16 +20,12 @@ class QueueDomainService:
         return f"{base} {i}"
 
     @staticmethod
-    def _display_name(item: Any) -> str:
-        if isinstance(item, dict):
-            return item.get("display_name") or str(item.get("user_id"))
-        return str(item)
+    def _display_name(user: Dict) -> str:
+        return user.get("display_name") or str(user.get("user_id"))
 
     @staticmethod
-    def _user_id(item: Any) -> Optional[int]:
-        if isinstance(item, dict):
-            return item.get("user_id")
-        return None
+    def _user_id(user: Dict) -> int:
+        return user.get("user_id")
 
     @staticmethod
     def remove_by_pos_or_name(queue: List[dict], args: list[str]) -> RemoveResult:

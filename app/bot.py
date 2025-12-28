@@ -55,7 +55,7 @@ async def run_bot() -> None:
 
             # Восстанавливаем планировщик автo-удаления из БД
             try:
-                from app.handlers.scheduler import auto_cleanup_service
+                from app.scheduler import auto_cleanup_service
 
                 logger.info("Восстанавление авто-удалений из БД...")
                 await auto_cleanup_service.restore_all_expirations(app)
@@ -72,7 +72,7 @@ async def run_bot() -> None:
             break
 
         except Exception as e:
-            logger.error(f"Ошибка при запуске (попытка {attempt + 1}): {e}", exc_info=True)
+            logger.error(f"Ошибка при запуске (попытка {attempt + 1}): {e}")
             attempt += 1
             if attempt < MAX_RETRIES:
                 delay = RETRY_DELAY * (2 ** (attempt - 1))  # экспоненциальная задержка
