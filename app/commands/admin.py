@@ -1,10 +1,8 @@
-# app/handlers/admin_commands.py
 from functools import wraps
 
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.handlers.scheduler import cancel_queue_expiration, reschedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.utils.utils import delete_message_later, is_user_admin, parse_queue_args, safe_delete, with_ctx
@@ -52,8 +50,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     if last_id:
         await safe_delete(context.bot, ctx, last_id)
 
-    await queue_service.delete_queue(ctx)
-    await cancel_queue_expiration(context, ctx)
+    await queue_service.delete_queue(context, ctx)
 
 
 @with_ctx
@@ -72,8 +69,7 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
         if last_id:
             await safe_delete(context.bot, ctx, last_id)
-        await queue_service.delete_queue(ctx)
-        await cancel_queue_expiration(context, ctx)
+        await queue_service.delete_queue(context, ctx)
 
 
 @with_ctx
@@ -191,9 +187,9 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
     try:
         hours = int(context.args[-1])
         # Валидация
-        if hours < 1:
-            await delete_message_later(context, ctx, "Время должно быть не менее 1 часа.")
-            return
+        # if hours < 1:
+        #     await delete_message_later(context, ctx, "Время должно быть не менее 1 часа.")
+        #     return
 
         queue_name = " ".join(context.args[:-1])
         queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
@@ -207,7 +203,7 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
         ctx.queue_id = queue["id"]
 
         # Устанавливаем новое время
-        await reschedule_queue_expiration(context, ctx, hours)
+        await queue_service.auto_cleanup_service.reschedule_expiration(context, ctx, hours * 3600)
 
         await delete_message_later(
             context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} ч."

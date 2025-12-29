@@ -33,7 +33,7 @@ async def handle_queue_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         if last_id:
             await safe_delete(context.bot, ctx, last_id)
 
-        await queue_service.delete_queue(ctx)
+        await queue_service.delete_queue(context, ctx)
 
     elif action == "back":
         queues = await queue_service.repo.get_all_queues(ctx.chat_id)

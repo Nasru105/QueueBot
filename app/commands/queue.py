@@ -1,7 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.handlers.scheduler import schedule_queue_expiration
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.queues_menu.inline_keyboards import queues_menu_keyboard
@@ -23,15 +22,15 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         queue_name = " ".join(args_parts)
     else:
         queue_name = await queue_service.generate_queue_name(ctx.chat_id)
-
     ctx.queue_name = queue_name
-    queue_id = await queue_service.create_queue(ctx)
+
+    expires_in_seconds = int(parsed_flags["-h"]) * 3600 if parsed_flags["-h"] else 86400
+    queue_id = await queue_service.create_queue(context, ctx, expires_in_seconds)
     ctx.queue_id = queue_id
 
     if not queue_id:
         await delete_message_later(context, ctx, f"Очередь с именем {ctx.queue_name} уже существет")
     await queue_service.send_queue_message(ctx, context)
-    await schedule_queue_expiration(context, ctx, int(parsed_flags["-h"]) * 3600 if parsed_flags["-h"] else 86400)
 
 
 @with_ctx

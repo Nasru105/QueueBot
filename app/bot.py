@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder
 
 from app.commands import register_handlers, set_commands
-from app.services.logger import QueueLogger, logger
+from app.services.logger import LogManager, QueueLogger, logger
 from app.services.mongo_storage import queue_collection
 
 load_dotenv()
@@ -41,6 +41,8 @@ async def run_bot() -> None:
     attempt = 0
     while attempt < MAX_RETRIES:
         try:
+            await LogManager.start()
+
             logger.info("Запуск бота...")
             await ensure_indexes()
             app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
@@ -55,10 +57,10 @@ async def run_bot() -> None:
 
             # Восстанавливаем планировщик автo-удаления из БД
             try:
-                from app.handlers.scheduler import auto_cleanup_service
+                from app.queues import queue_service
 
                 logger.info("Восстанавление авто-удалений из БД...")
-                await auto_cleanup_service.restore_all_expirations(app)
+                await queue_service.auto_cleanup_service.restore_all_expirations(app)
             except Exception as e:
                 logger.warning(f"Не удалось восстановить авто-удаления: {e}")
 
@@ -87,6 +89,7 @@ async def run_bot() -> None:
                 await app.updater.stop()
                 await app.stop()
                 await app.shutdown()
+                await LogManager.shutdown()
 
 
 def main() -> None:

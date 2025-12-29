@@ -4,7 +4,10 @@ import logging
 import os
 import sys
 import time
-from collections import OrderedDict
+import weakref
+from collections import OrderedDict, deque
+from datetime import datetime
+from typing import Deque, Dict, Optional
 
 from pythonjsonlogger import jsonlogger
 
@@ -83,14 +86,76 @@ logger.addHandler(stdout_handler)
 logger.addHandler(stderr_handler)
 logger.addHandler(file_handler)
 
-# === MongoDB Handler ===
+# === Буферизированный MongoDB Handler ===
 try:
     from .mongo_storage import log_collection
 
-    class MongoHandler(logging.Handler):
+    class BufferedMongoHandler(logging.Handler):
+        """Буферизированный обработчик для записи логов в MongoDB"""
+
+        # Классовые переменные для управления буфером
+        _instances: weakref.WeakSet = weakref.WeakSet()
+        _flush_task: Optional[asyncio.Task] = None
+        _flush_interval: int = 5  # Секунд между сбросами буфера
+        _is_shutting_down = False
+        _start_lock = asyncio.Lock()
+
+        def __init__(self, buffer_size: int = 100, flush_interval: int = 5):
+            super().__init__()
+            self.buffer_size = buffer_size
+            self.flush_interval = flush_interval
+            self._buffer: Deque[Dict] = deque(maxlen=buffer_size)
+            self._lock = asyncio.Lock()
+
+            # Регистрируем этот обработчик
+            self.__class__._instances.add(self)
+
+            # Отложенный запуск фоновой задачи (при первом вызове emit)
+            self._background_started = False
+
+        def _ensure_background_task(self):
+            """Запускает фоновую задачу при необходимости"""
+            if not self._background_started and not self.__class__._is_shutting_down:
+                # Пытаемся получить работающий event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    # Если есть работающий loop, запускаем задачу
+                    if self.__class__._flush_task is None or self.__class__._flush_task.done():
+                        self.__class__._flush_task = loop.create_task(self.__class__._flush_loop())
+                    self._background_started = True
+                except RuntimeError:
+                    # Нет работающего event loop - запустим позже
+                    pass
+
+        @classmethod
+        async def _flush_loop(cls):
+            """Цикл периодического сброса буфера"""
+            while not cls._is_shutting_down:
+                try:
+                    await asyncio.sleep(cls._flush_interval)
+                    await cls._flush_all_buffers()
+                except asyncio.CancelledError:
+                    # Задача была отменена (при shutdown)
+                    break
+                except Exception:
+                    await asyncio.sleep(1)  # Подождать перед повторной попыткой
+
+        @classmethod
+        async def _flush_all_buffers(cls):
+            """Сбрасывает буферы всех экземпляров обработчика"""
+            if not cls._instances:
+                return
+
+            for handler in cls._instances:
+                await handler._flush_buffer()
+
         def emit(self, record):
+            """Обработка записи лога (синхронная часть)"""
             try:
-                # Форматируем запись лога как dict
+                # Убедимся, что фоновая задача запущена
+                self._ensure_background_task()
+
+                # Форматируем запись лога
                 log_entry = self.format(record)
 
                 # Преобразуем JSON строку в dict
@@ -99,33 +164,81 @@ try:
                 else:
                     log_dict = log_entry
 
-                # Создаем новое событие для асинхронной вставки
-                async def insert_log():
-                    try:
-                        await log_collection.insert_one(log_dict)
-                    except Exception as e:
-                        print(f"Error inserting log to MongoDB: {e}")
+                # Добавляем дополнительные поля
+                log_dict["timestamp"] = datetime.now().isoformat()
 
-                # Запускаем асинхронную задачу
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Если цикл уже запущен, создаем задачу
-                        asyncio.create_task(insert_log())
-                    else:
-                        # Если цикл не запущен, запускаем его
-                        loop.run_until_complete(insert_log())
-                except RuntimeError:
-                    # Если нет event loop, создаем новый
-                    asyncio.run(insert_log())
+                # Добавляем в буфер
+                self._buffer.append(log_dict)
+
+                # Если буфер заполнен, запускаем немедленный сброс
+                if len(self._buffer) >= self.buffer_size:
+                    # Пытаемся запустить асинхронную задачу для сброса
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(self._flush_buffer())
+                    except RuntimeError:
+                        # Нет работающего event loop - сохраним для следующего сброса
+                        pass
 
             except Exception as e:
-                # Логируем ошибку, но не прерываем выполнение
-                print(f"MongoDB logging error: {e}")
+                print(f"BufferedMongoHandler.emit error: {e}", file=sys.stderr)
 
-    mongo_handler = MongoHandler()
+        async def _flush_buffer(self):
+            """Асинхронный сброс буфера в MongoDB"""
+            async with self._lock:
+                if not self._buffer:
+                    return
+
+                try:
+                    # Копируем и очищаем буфер
+                    logs_to_insert = list(self._buffer)
+                    self._buffer.clear()
+
+                    if logs_to_insert:
+                        # Вставляем все записи одним запросом
+                        await log_collection.insert_many(logs_to_insert)
+
+                except Exception as e:
+                    print(f"Failed to flush logs to MongoDB: {e}", file=sys.stderr)
+                    # Возвращаем логи обратно в буфер (кроме самых старых, если он переполнен)
+                    if len(self._buffer) + len(logs_to_insert) > self.buffer_size:
+                        # Оставляем место для новых записей
+                        keep_count = self.buffer_size - len(self._buffer)
+                        logs_to_insert = logs_to_insert[-keep_count:]
+
+                    # Возвращаем логи в начало буфера
+                    self._buffer.extendleft(reversed(logs_to_insert))
+
+        @classmethod
+        async def shutdown(cls):
+            """Принудительный сброс всех буферов при завершении работы"""
+            cls._is_shutting_down = True
+
+            if cls._flush_task:
+                cls._flush_task.cancel()
+                try:
+                    await cls._flush_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Сбрасываем все буферы
+            await cls._flush_all_buffers()
+
+        def close(self):
+            """Закрытие обработчика"""
+            super().close()
+            # Удаляем обработчик из списка
+            self.__class__._instances.discard(self)
+
+    # Создаем и настраиваем обработчик
+    mongo_handler = BufferedMongoHandler(
+        buffer_size=int(os.environ.get("LOG_BUFFER_SIZE", 100)),
+        flush_interval=int(os.environ.get("LOG_FLUSH_INTERVAL", 5)),
+    )
     mongo_handler.setFormatter(formatter)
     logger.addHandler(mongo_handler)
+
+    print("MongoDB buffered logging initialized successfully")
 
 except ImportError as e:
     print(f"MongoDB logging disabled: {e}")
@@ -134,26 +247,89 @@ except Exception as e:
 
 
 class QueueLogger:
+    """Класс для логирования действий с очередями"""
+
     @classmethod
-    def log(cls, ctx: ActionContext = ActionContext(), action: str = "action", level: int = logging.INFO) -> None:
+    async def log(
+        cls,
+        ctx: Optional[ActionContext] = None,
+        action: str = "action",
+        level: int = logging.INFO,
+    ) -> None:
+        """
+        Асинхронное логирование действия
+
+        Args:
+            ctx: Контекст действия (если None, создается новый)
+            action: Текст действия
+            level: Уровень логирования
+        """
+        # Создаем контекст только если он не передан
+        if ctx is None:
+            ctx = ActionContext()
+
         logger.log(level, action, extra={"chat_title": ctx.chat_title, "queue": ctx.queue_name, "actor": ctx.actor})
 
     @classmethod
-    def joined(cls, ctx: ActionContext, user_name, position):
-        cls.log(ctx, f"join {user_name} ({position})")
+    async def joined(cls, ctx: ActionContext, user_name: str, position: int):
+        """Логирование входа пользователя в очередь"""
+        await cls.log(ctx, f"join {user_name} ({position})")
 
     @classmethod
-    def leaved(cls, ctx: ActionContext, user_name, position):
-        cls.log(ctx, f"leave {user_name} ({position})")
+    async def leaved(cls, ctx: ActionContext, user_name: str, position: int):
+        """Логирование выхода пользователя из очереди"""
+        await cls.log(ctx, f"leave {user_name} ({position})")
 
     @classmethod
-    def inserted(cls, ctx: ActionContext, user_name, position):
-        cls.log(ctx, f"insert {user_name} ({position})")
+    async def inserted(cls, ctx: ActionContext, user_name: str, position: int):
+        """Логирование вставки пользователя в очередь"""
+        await cls.log(ctx, f"insert {user_name} ({position})")
 
     @classmethod
-    def removed(cls, ctx: ActionContext, user_name, position):
-        cls.log(ctx, f"remove {user_name} ({position})")
+    async def removed(cls, ctx: ActionContext, user_name: str, position: int):
+        """Логирование удаления пользователя из очереди"""
+        await cls.log(ctx, f"remove {user_name} ({position})")
 
     @classmethod
-    def replaced(cls, ctx: ActionContext, user_name1, pos1, user_name2, pos2):
-        cls.log(ctx, f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})")
+    async def replaced(cls, ctx: ActionContext, user_name1: str, pos1: int, user_name2: str, pos2: int):
+        """Логирование замены пользователей в очереди"""
+        await cls.log(ctx, f"replace {user_name1} ({pos1}) с {user_name2} ({pos2})")
+
+
+# Дополнительные утилиты для работы с логами
+class LogManager:
+    """Менеджер для управления логированием"""
+
+    @staticmethod
+    async def start():
+        """Явный запуск фоновых задач логирования"""
+        for handler in logger.handlers:
+            if hasattr(handler, "_ensure_background_task"):
+                handler._ensure_background_task()
+
+    @staticmethod
+    async def flush_all():
+        """Принудительный сброс всех буферов логов"""
+        for handler in logger.handlers:
+            if hasattr(handler, "_flush_buffer"):
+                await handler._flush_buffer()
+
+    @staticmethod
+    def get_buffer_size() -> int:
+        """Получить текущий размер буфера"""
+        total = 0
+        for handler in logger.handlers:
+            if hasattr(handler, "_buffer"):
+                total += len(handler._buffer)
+        return total
+
+    @staticmethod
+    async def shutdown():
+        """Корректное завершение работы системы логирования"""
+        for handler in logger.handlers:
+            if hasattr(handler, "shutdown"):
+                await handler.shutdown()
+
+
+# Экспортируем утилиты
+__all__ = ["QueueLogger", "LogManager", "logger"]

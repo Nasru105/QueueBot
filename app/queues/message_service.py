@@ -17,9 +17,9 @@ class QueueMessageService:
     Отвечает также за сохранение message_id через repo (repo должен быть передан).
     """
 
-    def __init__(self, repo, bot_logger=QueueLogger):
+    def __init__(self, repo, logger):
         self.repo: QueueRepository = repo
-        self.logger = bot_logger
+        self.logger: QueueLogger = logger
 
     async def send_queue_message(self, ctx: ActionContext, text: str, keyboard, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -42,7 +42,7 @@ class QueueMessageService:
             await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_id, sent.message_id)
             return sent.message_id
         except Exception as ex:
-            self.logger.log(ctx, f"send failed: {type(ex).__name__}: {ex}", level=logging.ERROR)
+            await self.logger.log(ctx, f"send failed: {type(ex).__name__}: {ex}", level=logging.ERROR)
             raise MessageServiceError(ex)
 
     async def edit_queue_message(self, context: ContextTypes.DEFAULT_TYPE, ctx, text: str, keyboard):
@@ -68,11 +68,11 @@ class QueueMessageService:
             # игнорируем "Message is not modified"
             if "not modified" in str(ex).lower():
                 return msg_id
-            self.logger.log(ctx, f"edit failed (BadRequest): {ex}", level=logging.ERROR)
+            await self.logger.log(ctx, f"edit failed (BadRequest): {ex}", level=logging.ERROR)
             raise MessageServiceError(ex)
         except Exception as ex:
             # log and fallback to sending new message (if bot context available)
-            self.logger.log(ctx, f"edit failed: {ex}", level=logging.ERROR)
+            await self.logger.log(ctx, f"edit failed: {ex}", level=logging.ERROR)
             if context:
                 sent = await context.bot.send_message(
                     chat_id=ctx.chat_id,
