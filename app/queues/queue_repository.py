@@ -71,31 +71,6 @@ class QueueRepository:
         await self.update_chat(chat_id, {"queues": queues})
         return len(queue)
 
-    # async def add_to_queue_by_name(self, chat_id: int, queue_name: str, user_id: int, display_name: str) -> int:
-    #     doc = await self.get_chat(chat_id)
-    #     if not doc:
-    #         raise ChatNotFoundError(f"chat {chat_id} not found")
-
-    #     queues = doc.get("queues", {})
-    #     target_qid = None
-    #     for qid, q in queues.items():
-    #         if q.get("name") == queue_name:
-    #             target_qid = qid
-    #             break
-
-    #     if target_qid is None:
-    #         raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
-
-    #     queue_list = queues[target_qid].setdefault("queue", [])
-    #     # queue_list now stores dicts: {"user_id": int, "display_name": str}
-    #     if any(u.get("user_id") == user_id for u in queue_list):
-    #         raise UserAlreadyExistsError(f"user {user_id} already in queue")
-
-    #     queue_list.append({"user_id": user_id, "display_name": display_name})
-    #     queues[target_qid]["last_modified"] = await get_now_formatted_time()
-    #     await self.update_chat(chat_id, {"queues": queues})
-    #     return len(queue_list)
-
     async def remove_from_queue(self, chat_id: int, queue_id: str, user_id: int) -> Optional[int]:
         doc = await self.get_chat(chat_id)
         if not doc:
@@ -113,33 +88,6 @@ class QueueRepository:
         queues[queue_id]["last_modified"] = await get_now()
         await self.update_chat(chat_id, {"queues": queues})
         return position
-
-    # async def remove_from_queue_by_name(self, chat_id: int, queue_name: str, user_id: int) -> Optional[int]:
-    # doc = await self.get_chat(chat_id)
-    # if not doc:
-    #     raise ChatNotFoundError(f"chat {chat_id} not found")
-
-    # queues = doc.get("queues", {})
-    # target_qid = None
-    # for qid, q in queues.items():
-    #     if q.get("name") == queue_name:
-    #         target_qid = qid
-    #         break
-
-    # if target_qid is None:
-    #     raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
-
-    # queue_list = queues[target_qid].get("queue", [])
-    # # find by user_id
-    # idx = next((i for i, u in enumerate(queue_list) if u.get("user_id") == user_id), None)
-    # if idx is None:
-    #     raise UserNotFoundError(f"user id '{user_id}' not found in queue '{queue_name}'")
-
-    # position = idx + 1
-    # queue_list.pop(idx)
-    # queues[target_qid]["last_modified"] = await get_now_formatted_time()
-    # await self.update_chat(chat_id, {"queues": queues})
-    # return position
 
     async def create_queue(self, chat_id: int, chat_title: str, queue_name: str) -> str:
         doc = await self.create_or_get_chat(chat_id, chat_title)
@@ -188,40 +136,7 @@ class QueueRepository:
             # Остались другие очереди → обновляем словарь
             await self.update_chat(chat_id, {"queues": queues})
 
-    # async def delete_queue_by_name(self, chat_id: int, queue_name: str) -> bool:
-    #     """
-    #     Удаляет очередь по имени.
-    #     Если это была последняя очередь — полностью удаляет документ чата.
-    #     """
-    #     # Получаем документ
-    #     doc = await queue_collection.find_one({"chat_id": chat_id})
-    #     if not doc:
-    #         raise ChatNotFoundError(f"chat {chat_id} not found")
-
-    #     queues = doc.get("queues", {}) or {}
-
-    #     # Найти ключ, соответствующий имени очереди
-    #     key_to_remove = None
-    #     for qid, q in queues.items():
-    #         if q.get("name") == queue_name:
-    #             key_to_remove = qid
-    #             break
-
-    #     if key_to_remove is None:
-    #         # Очередь не найдена
-    #         raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
-
-    #     # Удаляем очередь
-    #     del queues[key_to_remove]
-
-    #     if not queues:
-    #         # Это была последняя очередь → удаляем весь документ
-    #         await queue_collection.delete_one({"chat_id": chat_id})
-    #     else:
-    #         # Остались другие очереди → обновляем словарь
-    #         await queue_collection.update_one({"chat_id": chat_id}, {"$set": {"queues": queues}})
-
-    async def update_queue(self, chat_id: int, queue_id: str, new_members: List[dict]):
+    async def update_queue_members(self, chat_id: int, queue_id: str, new_members: List[dict]):
         """
         Обновляет список пользователей в очереди.
         """
@@ -238,33 +153,6 @@ class QueueRepository:
             await self.update_chat(chat_id, {"queues": queues})
         else:
             raise QueueNotFoundError(f"queue '{queue_id}' not found in chat {chat_id}")
-
-    # async def update_queue_by_name(self, chat_id: int, queue_name: str, new_queue: List[dict]):
-    #     """
-    #     Обновляет список пользователей в очереди.
-
-    #     :param chat_id: ID чата
-    #     :param queue_name: Имя очереди
-    #     :param new_queue: Новый список пользователей (List[str])
-    #     """
-    #     doc = await self.get_chat(chat_id)
-    #     if not doc:
-    #         raise ChatNotFoundError(f"chat {chat_id} not found")
-
-    #     queues = doc.get("queues", {}) or {}
-    #     target_qid = None
-    #     for qid, q in queues.items():
-    #         if q.get("name") == queue_name:
-    #             target_qid = qid
-    #             break
-
-    #     if target_qid is not None:
-    #         # expect new_queue to be list of dicts
-    #         queues[target_qid]["queue"] = new_queue
-    #         queues[target_qid]["last_modified"] = await get_now_formatted_time()
-    #         await self.update_chat(chat_id, {"queues": queues})
-    #     else:
-    #         raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
 
     async def get_last_modified_time(self, chat_id: int, queue_id: str) -> Optional[datetime]:
         """Возвращает datetime или None. Поддерживает старый строковый формат."""
@@ -325,6 +213,22 @@ class QueueRepository:
 
     async def clear_list_message_id(self, chat_id: int):
         await self.update_chat(chat_id, {"last_list_message_id": None})
+
+    async def get_queue_description(self, chat_id: int, queue_id: int) -> Optional[int]:
+        queue = await self.get_queue(chat_id, queue_id)
+        if not queue:
+            raise QueueNotFoundError(f"Failed to get description: queue ({queue_id}) not found in chat {chat_id}")
+        return queue["description"]
+
+    async def set_queue_description(self, chat_id: int, queue_id: int, description: str = None) -> Optional[int]:
+        queue = await self.get_queue(chat_id, queue_id)
+        if queue:
+            await self.update_chat(chat_id, {f"queues.{queue_id}.description": description})
+        else:
+            raise QueueNotFoundError(f"Failed to get description: queue ({queue_id}) not found in chat {chat_id}")
+
+    async def clear_queue_description(self, chat_id: int, queue_id: int):
+        await self.set_queue_description(chat_id, queue_id)
 
     async def get_queue_expiration(self, chat_id: int, queue_id: str) -> Optional[datetime]:
         """Возвращает datetime expiration или None. Поддерживает старый строковый формат."""
@@ -413,46 +317,6 @@ class QueueRepository:
             await user_collection.update_one({"user_id": user.id}, {"$set": {"username": user.username}}, upsert=True)
 
         return doc_user
-
-    # async def attach_user_id_by_display_name(
-    #     self, chat_id: int, queue_name: str, display_name: str, user_id: int
-    # ) -> Optional[int]:
-    #     """Если в очереди есть элемент с display_name, то привязать к нему user_id и вернуть индекс (0-based).
-    #     Если не найдено — вернуть None.
-    #     """
-    #     doc = await self.get_chat(chat_id)
-    #     if not doc:
-    #         raise ChatNotFoundError(f"chat {chat_id} not found")
-
-    #     queues = doc.get("queues", {}) or {}
-    #     target_qid = None
-    #     for qid, q in queues.items():
-    #         if q.get("name") == queue_name:
-    #             target_qid = qid
-    #             break
-
-    #     if target_qid is None:
-    #         raise QueueNotFoundError(f"queue '{queue_name}' not found in chat {chat_id}")
-
-    #     queue_list = queues[target_qid].setdefault("queue", [])
-    #     for idx, item in enumerate(queue_list):
-    #         # item might be plain string (legacy) or dict
-    #         if isinstance(item, dict):
-    #             if item.get("display_name") == display_name:
-    #                 if item.get("user_id") != user_id:
-    #                     item["user_id"] = user_id
-    #                     queues[target_qid]["last_modified"] = await get_now_formatted_time()
-    #                     await self.update_chat(chat_id, {"queues": queues})
-    #                 return idx
-    #         else:
-    #             if str(item) == display_name:
-    #                 # convert legacy string to dict
-    #                 queue_list[idx] = {"user_id": user_id, "display_name": display_name}
-    #                 queues[target_qid]["last_modified"] = await get_now_formatted_time()
-    #                 await self.update_chat(chat_id, {"queues": queues})
-    #                 return idx
-
-    #     return None
 
     async def update_user_display_name(self, user_id: int, display_names: Dict[str, str]):
         await user_collection.update_one({"user_id": user_id}, {"$set": {"display_names": display_names}}, upsert=True)

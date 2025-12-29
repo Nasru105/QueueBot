@@ -95,7 +95,7 @@ class QueueFacadeService:
 
         if res.removed_name:
             try:
-                await self.repo.update_queue(ctx.chat_id, ctx.queue_id, res.updated_queue)
+                await self.repo.update_queue_members(ctx.chat_id, ctx.queue_id, res.updated_queue)
                 await self.logger.removed(ctx, res.removed_name, res.position)
             except QueueError as ex:
                 await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
@@ -127,7 +127,7 @@ class QueueFacadeService:
 
         if res.user_name:
             try:
-                await self.repo.update_queue(ctx.chat_id, ctx.queue_id, res.updated_queue)
+                await self.repo.update_queue_members(ctx.chat_id, ctx.queue_id, res.updated_queue)
                 if res.old_position:
                     # old_position already 1-based
                     await self.logger.removed(ctx, user_name, res.old_position)
@@ -170,7 +170,7 @@ class QueueFacadeService:
             return ReplaceResult(ctx.queue_name, None, None, None, None, None)
 
         try:
-            await self.repo.update_queue(ctx.chat_id, ctx.queue_id, result.updated_queue)
+            await self.repo.update_queue_members(ctx.chat_id, ctx.queue_id, result.updated_queue)
         except QueueError as ex:
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
             return result
@@ -181,7 +181,7 @@ class QueueFacadeService:
     async def send_queue_message(self, ctx: ActionContext, context):
         try:
             queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_id)
-            text = self.presenter.format_queue_text(ctx.queue_name, queue["members"])
+            text = self.presenter.format_queue_text(queue)
             keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
             return await self.message_service.send_queue_message(ctx, text, keyboard, context)
         except QueueError as ex:
@@ -195,7 +195,7 @@ class QueueFacadeService:
                 queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
             ctx.queue_id = queue["id"]
             ctx.queue_name = queue["name"]
-            text = self.presenter.format_queue_text(ctx.queue_name, queue["members"])
+            text = self.presenter.format_queue_text(queue)
             keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
             return await self.message_service.edit_queue_message(context, ctx, text, keyboard)
         except QueueError as ex:
@@ -236,5 +236,12 @@ class QueueFacadeService:
             user_display_name = await self.user_service.clear_user_display_name(ctx, user, global_mode)
             await self.logger.log(ctx, "clear display name")
             return user_display_name
+        except QueueError as ex:
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+
+    async def set_queue_description(self, ctx: ActionContext, description):
+        try:
+            await self.repo.set_queue_description(ctx.chat_id, ctx.queue_id, description)
+            await self.logger.log(ctx, "set description")
         except QueueError as ex:
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)

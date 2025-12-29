@@ -1,3 +1,4 @@
+import re
 from functools import wraps
 
 from telegram import Chat, Update
@@ -81,9 +82,9 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         return
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    queue_names = [queue["name"] for queue in queues.values()]
-    queue_name, rest = parse_queue_args(args, queue_names)
+    queue_id, queue_name, rest = parse_queue_args(args, queues)
     ctx.queue_name = queue_name
+    ctx.queue_id = queue_id
 
     if not queue_name:
         await delete_message_later(context, ctx, "Очередь не найдена.")
@@ -104,9 +105,9 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         return
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    queue_names = [queue["name"] for queue in queues.values()]
-    queue_name, rest = parse_queue_args(args, queue_names)
+    queue_id, queue_name, rest = parse_queue_args(args, queues)
     ctx.queue_name = queue_name
+    ctx.queue_id = queue_id
 
     if not queue_name:
         await delete_message_later(context, ctx, "Очередь не найдена.")
@@ -133,9 +134,9 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
         return
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    queue_names = [queue["name"] for queue in queues.values()]
-    queue_name, rest_names = parse_queue_args(args, queue_names)
+    queue_id, queue_name, rest_names = parse_queue_args(args, queues)
     ctx.queue_name = queue_name
+    ctx.queue_id = queue_id
 
     if not queue_name:
         await delete_message_later(context, ctx, "Очередь не найдена.")
@@ -154,17 +155,17 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
         return
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
-    queue_names = [queue["name"] for queue in queues.values()]
-    old_name, rest = parse_queue_args(args, queue_names)
+    queue_id, old_name, rest = parse_queue_args(args, queues)
     new_name = " ".join(rest).strip()
     ctx.queue_name = old_name
+    ctx.queue_id = queue_id
 
     if not old_name or not new_name:
         await delete_message_later(context, ctx, "Укажите старое и новое имя очереди.")
         return
 
-    if new_name in queue_names:
-        await delete_message_later(context, ctx, "Очередь с новым именем уже существует.")
+    if new_name in {queue["name"] for queue in queues.values()}:
+        await delete_message_later(context, ctx, f"Очередь с именем '{new_name}' уже существует.")
         return
 
     await queue_service.rename_queue(ctx, new_name)
@@ -187,9 +188,9 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
     try:
         hours = int(context.args[-1])
         # Валидация
-        # if hours < 1:
-        #     await delete_message_later(context, ctx, "Время должно быть не менее 1 часа.")
-        #     return
+        if hours < 1:
+            await delete_message_later(context, ctx, "Время должно быть не менее 1 часа.")
+            return
 
         queue_name = " ".join(context.args[:-1])
         queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
@@ -211,3 +212,34 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
 
     except ValueError:
         await delete_message_later(context, ctx, "Неверный формат числа. Введите целое число часов.")
+
+
+@with_ctx
+@admins_only
+async def set_queue_description(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    if len(context.args) < 1:
+        await delete_message_later(context, ctx, "Использование: \n /set_description <Имя очереди> [описание]")
+        return
+
+    queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+    queue_id, queue_name, rest = parse_queue_args(context.args, queues)
+    ctx.queue_name = queue_name
+    ctx.queue_id = queue_id
+
+    if not rest:
+        await queue_service.set_queue_description(ctx, None)
+        await queue_service.update_queue_message(context, ctx)
+        return
+
+    original_text = update.message.text
+    escaped_queue_name = re.escape(queue_name)
+    pattern = rf"^/set_description\s+{escaped_queue_name}\s+(.*)"
+    match = re.match(pattern, original_text, re.DOTALL)
+    if match:
+        description = match.group(1)
+
+    if not queue_name:
+        await delete_message_later(context, ctx, "Очередь не найдена.")
+        return
+    await queue_service.set_queue_description(ctx, description)
+    await queue_service.update_queue_message(context, ctx)

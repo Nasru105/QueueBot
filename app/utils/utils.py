@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 from functools import wraps
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
@@ -65,7 +65,7 @@ async def safe_delete(bot, ctx: ActionContext, message_id):
     try:
         await bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
-        QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
+        await QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
 
 
 async def delete_later(context, ctx, message_id, time=5):
@@ -81,8 +81,7 @@ async def delete_message_later(context, ctx, text, time=5, reply_markup=None):
     return task
 
 
-# app/queues_service/__init__.py или utils
-def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str], list[str]]:
+def parse_queue_args(args: list[str], queues: dict[str, dict[str, Any]]) -> tuple[str, str, list[str]]:
     """
     Парсит аргументы команды.
     Ищет САМОЕ ДЛИННОЕ совпадение имени очереди.
@@ -92,16 +91,16 @@ def parse_queue_args(args: list[str], queues: list[str]) -> tuple[Optional[str],
 
     best_match = None
     best_i = 0
-
+    queue_names = {queue["name"]: queue["id"] for queue in queues.values()}
     for i in range(1, len(args) + 1):
         candidate = " ".join(args[:i])
-        if candidate in queues:
+        if candidate in queue_names:
             best_match = candidate
             best_i = i
 
     if best_match:
-        return best_match, args[best_i:]
-    return None, []
+        return queue_names[best_match], best_match, args[best_i:]
+    return None, None, []
 
 
 def parse_users_names(args: List[str], members: List[dict]) -> Tuple[Optional[str], Optional[str]]:

@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from app.commands.admin import admins_only
 from app.queues.models import ActionContext
 from app.services.mongo_storage import log_collection
-from app.utils.utils import delete_message_later, safe_delete, split_text, with_ctx
+from app.utils.utils import delete_message_later, split_text, with_ctx
 
 
 @with_ctx
@@ -34,10 +34,6 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
             lines.append(f"👤 {actor}")
 
         return "\n".join(lines)
-
-    message_id: int = update.message.message_id
-
-    await safe_delete(context.bot, ctx, message_id)
 
     args = context.args
     try:

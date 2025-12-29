@@ -126,6 +126,20 @@ class CommandHelp:
             "admin": True,
             "category": "Администрирование",
         },
+        "set_description": {
+            "description": "Изменение описания очереди",
+            "usage": "/set_description <Очередь> [описание]",
+            "details": (
+                "Устанавливает описание очереди.",
+                "Без параметра [описание] для сброса описания",
+            ),
+            "examples": (
+                "/set_description Дежурство Очередь дежурства на этой неделе",
+                "/set_description Дежурство",
+            ),
+            "admin": True,
+            "category": "Администрирование",
+        },
         "set_expire_time": {
             "description": "Изменение времени жизни очереди",
             "usage": "/set_expire_time <Очередь> <часы>",

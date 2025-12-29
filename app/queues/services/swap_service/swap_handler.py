@@ -95,7 +95,7 @@ async def respond_swap(context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext, u
             return
 
         members[req_idx], members[tgt_idx] = members[tgt_idx], members[req_idx]
-        await queue_service.repo.update_queue(ctx.chat_id, ctx.queue_id, members)
+        await queue_service.repo.update_queue_members(ctx.chat_id, ctx.queue_id, members)
         await swap_service.respond_swap(swap_id, user.id)
 
         await delete_message_later(context, ctx, "Обмен завершен.")

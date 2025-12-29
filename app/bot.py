@@ -86,8 +86,8 @@ async def run_bot() -> None:
 
         finally:
             if "app" in locals():
-                await app.updater.stop()
-                await app.stop()
+                # await app.updater.stop()
+                # await app.stop()
                 await app.shutdown()
                 await LogManager.shutdown()
 

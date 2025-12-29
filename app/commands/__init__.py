@@ -7,6 +7,7 @@ from app.commands.admin import (
     remove_user,
     rename_queue,
     replace_users,
+    set_queue_description,
     set_queue_expiration_time,
 )
 from app.commands.help import commands_list, help_command, start
@@ -33,6 +34,7 @@ def register_handlers(app: Application):
     app.add_handler(CommandHandler("replace", replace_users))
     app.add_handler(CommandHandler("rename", rename_queue))
 
+    app.add_handler(CommandHandler("set_description", set_queue_description))
     app.add_handler(CommandHandler("set_expire_time", set_queue_expiration_time))
 
     app.add_handler(CommandHandler("logs", get_logs))
@@ -40,7 +42,6 @@ def register_handlers(app: Application):
 
     app.add_handler(CallbackQueryHandler(queue_router, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(menu_router, pattern=r"^menu\|"))
-    # app.add_error_handler(error_handler)
 
 
 async def set_commands(app: Application):
