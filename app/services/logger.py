@@ -9,7 +9,7 @@ from collections import OrderedDict, deque
 from datetime import datetime
 from typing import Deque, Dict, Optional
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json as jsonlogger
 
 from app.queues.models import ActionContext
 

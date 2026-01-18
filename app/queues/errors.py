@@ -10,6 +10,10 @@ class QueueNotFoundError(QueueError):
     """Raised when a requested queue does not exist."""
 
 
+class MembersNotFoundError(QueueError):
+    """Raised when a requested queue does not exist."""
+
+
 class UserNotFoundError(QueueError):
     """Raised when a requested user is not found in a queue or DB."""
 

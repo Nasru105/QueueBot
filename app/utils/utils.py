@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 from functools import wraps
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
@@ -79,50 +79,6 @@ async def delete_message_later(context, ctx, text, time=5, reply_markup=None):
     )
     task = asyncio.create_task(delete_later(context, ctx, error_message.message_id, time))
     return task
-
-
-def parse_queue_args(args: list[str], queues: dict[str, dict[str, Any]]) -> tuple[str, str, list[str]]:
-    """
-    Парсит аргументы команды.
-    Ищет САМОЕ ДЛИННОЕ совпадение имени очереди.
-    """
-    if not args:
-        return None, []
-
-    best_match = None
-    best_i = 0
-    queue_names = {queue["name"]: queue["id"] for queue in queues.values()}
-    for i in range(1, len(args) + 1):
-        candidate = " ".join(args[:i])
-        if candidate in queue_names:
-            best_match = candidate
-            best_i = i
-
-    if best_match:
-        return queue_names[best_match], best_match, args[best_i:]
-    return None, None, []
-
-
-def parse_users_names(args: List[str], members: List[dict]) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Ищет два имени в очереди из аргументов.
-    Возвращает (имя1, имя2) или (None, None)
-    """
-    if len(args) < 2:
-        return None, None
-
-    # Извлекаем все имена из очереди
-    queue_names = [user["display_name"] for user in members]
-
-    # Пробуем найти два разных имени
-    for i in range(len(args) - 1):
-        name1 = " ".join(args[: i + 1])
-        name2 = " ".join(args[i + 1 :])
-
-        if name1 in queue_names and name2 in queue_names and name1 != name2:
-            return name1, name2
-
-    return None, None
 
 
 async def is_user_admin(context, chat_id, user_id) -> bool:

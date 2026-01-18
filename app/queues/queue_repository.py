@@ -44,7 +44,16 @@ class QueueRepository:
             return queues[queue_id]
         raise QueueNotFoundError(f"queue ({queue_id}) not found in chat {chat_id}")
 
-    async def get_queue_by_name(self, chat_id: int, queue_name: str) -> List[dict]:
+    async def get_queue_by_name(self, chat_id: int, queue_name: str) -> Dict:
+        """Получает очередь по имени.
+
+        Raises:
+            ChatNotFoundError
+            QueueNotFoundError
+
+        Returns:
+            dict: queue
+        """
         doc = await queue_collection.find_one({"chat_id": chat_id})
         if not doc:
             raise ChatNotFoundError(f"chat {chat_id} not found")
