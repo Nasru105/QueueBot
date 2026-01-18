@@ -2,7 +2,6 @@ import asyncio
 import logging
 from datetime import datetime
 from functools import wraps
-from typing import Dict, List, Tuple
 
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
@@ -42,7 +41,7 @@ def strip_user_full_name(user: User) -> str:
     first_name = user.first_name.strip() if user.first_name else ""
     return (
         f"{last_name} {first_name}".strip()
-        if last_name and first_name
+        if last_name or first_name
         else user.username
         if user.username
         else str(user.id)
@@ -54,7 +53,7 @@ async def has_user(members, user_id, display_name):
     for user in members:
         if user.get("user_id") == user_id:
             return True
-        elif user.get("display_name") == display_name:
+        elif user.get("display_name") == display_name and not user.get("user_id"):
             user["user_id"] = user_id
             return True
     return False
@@ -123,48 +122,3 @@ def split_text(text: str, end="\n──────────────\n", 
         text = text[cut:]
     parts.append(text)
     return parts
-
-
-def parse_flags_args(args: List[str], target_flags: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:
-    """
-    Универсальный разбор аргументов:
-    - флаги вида '-h 12'
-    - слитные флаги '-h12'
-    - любое число флагов
-    - сохраняет порядок обычных аргументов
-
-    Возвращает:
-        (обычные_аргументы, словарь_флагов)
-    """
-
-    args_parts = []
-    skip_next = False
-
-    # Множество ключей флагов для быстрого поиска
-    flag_keys = set(target_flags.keys())
-
-    for i, part in enumerate(args):
-        if skip_next:
-            skip_next = False
-            continue
-
-        # 1. Флаг формата "-h"
-        if part in flag_keys:
-            if i + 1 < len(args):
-                target_flags[part] = args[i + 1]
-                skip_next = True
-                continue
-            else:
-                raise ValueError(f"После флага '{part}' нужно указать значение")
-
-        # 2. Флаг формата "-h12"
-        for flag in flag_keys:
-            if part.startswith(flag) and len(part) > len(flag):
-                value = part[len(flag) :]
-                target_flags[flag] = value
-                break
-        else:
-            # 3. Обычный аргумент
-            args_parts.append(part)
-
-    return args_parts, target_flags

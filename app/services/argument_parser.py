@@ -2,7 +2,7 @@
 Модуль для унифицированной обработки аргументов команд очереди.
 """
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ArgumentParser:
@@ -141,3 +141,45 @@ class ArgumentParser:
 
         # Fallback: первое слово vs остальное
         return None, None
+
+    @staticmethod
+    def parse_flags_args(args: List[str], target_flags: Dict[str, Optional[str]]) -> Tuple[List[str], Dict[str, str]]:
+        """
+        Универсальный разбор аргументов:
+        - флаги вида '-h 12'
+        - слитные флаги '-h12'
+        - любое число флагов
+        - сохраняет порядок обычных аргументов
+
+        Returns:
+            (args_parts, target_flags)
+        """
+
+        args_parts = []
+        skip_next = False
+
+        for i, part in enumerate(args):
+            if skip_next:
+                skip_next = False
+                continue
+
+            # 1. Флаг формата "-h"
+            if part in target_flags:
+                if i + 1 < len(args):
+                    target_flags[part] = args[i + 1]
+                    skip_next = True
+                    continue
+                else:
+                    raise ValueError(f"После флага '{part}' нужно указать значение")
+
+            # 2. Флаг формата "-h12"
+            for flag in target_flags:
+                if part.startswith(flag) and len(part) > len(flag):
+                    value = part[len(flag) :]
+                    target_flags[flag] = value
+                    break
+            else:
+                # 3. Обычный аргумент
+                args_parts.append(part)
+
+        return args_parts, target_flags

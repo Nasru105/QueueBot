@@ -4,7 +4,8 @@ from telegram.ext import ContextTypes
 from app.queues import queue_service
 from app.queues.models import ActionContext
 from app.queues_menu.inline_keyboards import queues_menu_keyboard
-from app.utils.utils import delete_message_later, parse_flags_args, safe_delete, with_ctx
+from app.services.argument_parser import ArgumentParser
+from app.utils.utils import delete_message_later, safe_delete, with_ctx
 
 
 @with_ctx
@@ -15,7 +16,7 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     """
     flags = {"-h": None}
 
-    args_parts, parsed_flags = parse_flags_args(context.args, flags)
+    args_parts, parsed_flags = ArgumentParser.parse_flags_args(context.args, flags)
 
     # Определяем имя очереди
     if args_parts:
@@ -24,7 +25,12 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         queue_name = await queue_service.generate_queue_name(ctx.chat_id)
     ctx.queue_name = queue_name
 
-    expires_in_seconds = int(parsed_flags["-h"]) * 3600 if parsed_flags["-h"] else 86400
+    try:
+        expires_in_seconds = int(parsed_flags["-h"]) * 3600 if parsed_flags.get("-h") else 86400
+    except (ValueError, TypeError):
+        await delete_message_later(context, ctx, "параметр -h должен быть целым числом, обозначающим часы")
+        return
+
     queue_id = await queue_service.create_queue(context, ctx, expires_in_seconds)
     ctx.queue_id = queue_id
 
@@ -86,11 +92,13 @@ async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
     await delete_message_later(context, ctx, response)
 
 
-async def chat_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+@with_ctx
+async def chat_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """Устанавливает никнейм пользователя в очередях."""
-    await nickname(update, context, global_mode=False)
+    await nickname(update, context, ctx=ctx, global_mode=False)
 
 
-async def global_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+@with_ctx
+async def global_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """Устанавливает отображаемое имя пользователя в очередях."""
-    await nickname(update, context, global_mode=True)
+    await nickname(update, context, ctx=ctx, global_mode=True)

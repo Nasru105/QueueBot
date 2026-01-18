@@ -41,11 +41,12 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
 
     queue_name = " ".join(context.args)
     queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
-    ctx.queue_name = queue["name"]
-    ctx.queue_id = queue["id"]
     if not queue:
         await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
         return
+
+    ctx.queue_name = queue.get("name")
+    ctx.queue_id = queue.get("id")
 
     # Удаляем сообщение очереди
     last_id = await queue_service.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
