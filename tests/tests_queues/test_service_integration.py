@@ -8,7 +8,7 @@ import pytest
 from telegram import User
 
 from app.queues.errors import QueueError
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Member, Queue
 from app.queues.service import QueueFacadeService
 
 
@@ -47,10 +47,15 @@ class TestQueueFacadeServiceIntegration:
         """Генерация имени для новой очереди"""
         service, mock_repo, _ = facade_service
 
-        mock_repo.get_all_queues = AsyncMock(return_value={"q1": {"name": "Очередь 1", "members": []}})
+        mock_repo.get_all_queues = AsyncMock(
+            return_value={
+                "q1": Queue(id="q1", name="Очередь 1", members=[Member(display_name="User1", user_id=1)]),
+                "q2": Queue(id="q2", name="Очередь 2", members=[Member(display_name="User1", user_id=1)]),
+            }
+        )
 
         result = await service.generate_queue_name(123)
-        assert "Очередь" in result
+        assert "Очередь 3" in result
 
     async def test_generate_queue_name_empty_chats(self, facade_service):
         """Генерация имени когда нет очередей"""

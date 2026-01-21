@@ -39,11 +39,11 @@ class SafeFormatter(jsonlogger.JsonFormatter):
 
         ordered = OrderedDict()
         ordered["message"] = log_record.pop("message", None)
+        ordered["queue"] = log_record.pop("queue", None)
+        ordered["chat_title"] = log_record.pop("chat_title", None)
+        ordered["actor"] = log_record.pop("actor", None)
         ordered["asctime"] = log_record.pop("asctime", None)
         ordered["level"] = log_record.pop("levelname", None).lower()
-        ordered["chat_title"] = log_record.pop("chat_title", None)
-        ordered["queue"] = log_record.pop("queue", None)
-        ordered["actor"] = log_record.pop("actor", None)
 
         for k, v in log_record.items():
             ordered[k] = v
@@ -88,7 +88,9 @@ logger.addHandler(file_handler)
 
 # === Буферизированный MongoDB Handler ===
 try:
-    from .mongo_storage import log_collection
+    from .mongo_storage import mongo_db
+
+    log_collection = mongo_db.db["log_data"]
 
     class BufferedMongoHandler(logging.Handler):
         """Буферизированный обработчик для записи логов в MongoDB"""

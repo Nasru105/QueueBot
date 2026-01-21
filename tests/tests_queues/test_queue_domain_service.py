@@ -1,342 +1,289 @@
 """
-Тесты для QueueDomainService - чистой бизнес-логики работы с очередью.
+Тесты для моделей Queue - бизнес-логики работы с очередью.
 """
 
 import pytest
 
-from app.queues.domain import QueueDomainService
 from app.queues.errors import InvalidPositionError, MembersNotFoundError, UserNotFoundError
+from app.queues.models import Member, Queue
 
 
 @pytest.fixture
-def domain_service():
-    """Фикстура для создания экземпляра сервиса."""
-    return QueueDomainService()
-
-
-@pytest.fixture
-def sample_members():
+def sample_queue():
     """Пример очереди с пользователями."""
-    return [
-        {"user_id": 1, "display_name": "Alice"},
-        {"user_id": 2, "display_name": "Bob"},
-        {"user_id": 3, "display_name": "Charlie"},
-    ]
+    return Queue(
+        id="test_queue",
+        name="Test Queue",
+        members=[
+            Member(user_id=1, display_name="Alice"),
+            Member(user_id=2, display_name="Bob"),
+            Member(user_id=3, display_name="Charlie"),
+        ],
+    )
 
 
-class TestGenerateQueueName:
-    """Тесты для генерации имён очередей."""
+class TestInsert:
+    """Тесты для вставки пользователей в очередь."""
 
-    def test_generate_queue_name_empty_dict(self, domain_service: QueueDomainService):
-        """Должна вернуть 'Очередь 1' для пустого словаря."""
-        result = domain_service.generate_queue_name({})
-        assert result == "Очередь 1"
+    def test_insert_at_end(self, sample_queue):
+        """Вставка в конец очереди."""
+        old_pos, new_pos = sample_queue.insert("Diana", user_id=4)
+        assert new_pos == 4
+        assert old_pos is None
+        assert len(sample_queue.members) == 4
+        assert sample_queue.members[-1].display_name == "Diana"
 
-    def test_generate_queue_name_with_existing(self, domain_service: QueueDomainService):
-        """Должна вернуть следующее свободное имя."""
-        queues = {
-            "queue_1": {"name": "Очередь 1", "members": [1, 2]},
-            "queue_2": {"name": "Очередь 2", "members": [3, 4]},
-        }
-        result = domain_service.generate_queue_name(queues)
-        assert result == "Очередь 3"
+    def test_insert_at_specific_position(self, sample_queue):
+        """Вставка в конкретную позицию."""
+        old_pos, new_pos = sample_queue.insert("Diana", desired_pos=1, user_id=4)
+        assert new_pos == 2
+        assert old_pos is None
+        assert sample_queue.members[1].display_name == "Diana"
+        assert len(sample_queue.members) == 4
 
-    def test_generate_queue_name_with_custom_base(self, domain_service: QueueDomainService):
-        """Должна использовать кастомное базовое имя."""
-        queues = {"queue_1": {"name": "Спортзал 1", "members": [1, 2]}}
-        result = domain_service.generate_queue_name(queues, base="Спортзал")
-        assert result == "Спортзал 2"
+    def test_insert_at_beginning(self, sample_queue):
+        """Вставка в начало очереди."""
+        old_pos, new_pos = sample_queue.insert("Diana", desired_pos=0, user_id=4)
+        assert new_pos == 1
+        assert old_pos is None
+        assert len(sample_queue.members) == 4
+        assert sample_queue.members[0].display_name == "Diana"
 
-    def test_generate_queue_name_with_gaps(self, domain_service: QueueDomainService):
-        """Должна найти первую доступную позицию."""
-        queues = {
-            "queue_1": {"name": "Очередь 1", "members": [1]},
-            "queue_3": {"name": "Очередь 3", "members": [2]},
-        }
-        result = domain_service.generate_queue_name(queues)
-        assert result == "Очередь 2"
+    def test_insert_duplicate_user(self, sample_queue):
+        """Повторная вставка существующего пользователя - перемещение."""
+        old_pos, new_pos = sample_queue.insert("Bob", desired_pos=0)
+        assert new_pos == 1
+        assert old_pos == 2
+        assert len(sample_queue.members) == 3
+        assert sample_queue.members[0].display_name == "Bob"
+
+    def test_insert_position_out_of_bounds_max(self, sample_queue):
+        """Вставка с позицией больше размера - должна вставить в конец."""
+        old_pos, new_pos = sample_queue.insert("Diana", desired_pos=100, user_id=4)
+        assert new_pos == 4
+        assert old_pos is None
+        assert sample_queue.members[-1].display_name == "Diana"
+
+    def test_insert_position_negative(self, sample_queue):
+        """Отрицательная позиция - вставка в начало."""
+        old_pos, new_pos = sample_queue.insert("Diana", desired_pos=-10, user_id=4)
+        assert new_pos == 1
+        assert sample_queue.members[0].display_name == "Diana"
 
 
-class TestRemoveByName:
-    """Тесты для удаления из очереди по имени."""
+class TestRemove:
+    """Тесты для удаления из очереди."""
 
-    def test_remove_by_name_success(self, domain_service: QueueDomainService, sample_members):
+    def test_remove_by_name_success(self, sample_queue):
         """Удаление по имени пользователя."""
-        removed_name, pos = domain_service.remove_by_name(sample_members, "Bob")
+        removed_name, pos = sample_queue.remove("Bob")
         assert removed_name == "Bob"
         assert pos == 2
-        assert len(sample_members) == 2
+        assert len(sample_queue.members) == 2
 
-    def test_remove_by_name_not_found(self, domain_service: QueueDomainService, sample_members):
+    def test_remove_by_name_not_found(self, sample_queue):
         """Ошибка при удалении несуществующего пользователя."""
         with pytest.raises(UserNotFoundError):
-            domain_service.remove_by_name(sample_members, "Unknown")
+            sample_queue.remove("Unknown")
 
-    def test_remove_by_name_multiword(self, domain_service: QueueDomainService):
+    def test_remove_by_name_multiword(self):
         """Удаление по имени из нескольких слов."""
-        queue = [
-            {"user_id": 1, "display_name": "John Doe"},
-            {"user_id": 2, "display_name": "Jane Smith"},
-        ]
-        removed_name, pos = domain_service.remove_by_name(queue, "John Doe")
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="John Doe"),
+                Member(user_id=2, display_name="Jane Smith"),
+            ],
+        )
+        removed_name, pos = queue.remove("John Doe")
         assert removed_name == "John Doe"
         assert pos == 1
 
-    def test_remove_from_empty_queue(self, domain_service: QueueDomainService):
+    def test_remove_from_empty_queue(self):
         """Ошибка при удалении из пустой очереди."""
-        with pytest.raises(UserNotFoundError):
-            domain_service.remove_by_name([], "Alice")
-
-    def test_remove_from_none_queue(self, domain_service: QueueDomainService):
-        """Обработка None в качестве очереди."""
+        queue = Queue(id="q1", name="Test Queue", members=[])
         with pytest.raises(MembersNotFoundError):
-            domain_service.remove_by_name(None, "Alice")
+            queue.remove("Alice")
 
 
-class TestRemoveByPos:
+class TestRemoveByPosition:
     """Тесты для удаления из очереди по позиции."""
 
-    def test_remove_by_position_success(self, domain_service: QueueDomainService, sample_members):
-        """Удаление по валидной позиции."""
-        removed_name, pos = domain_service.remove_by_position(sample_members, 2)
-        assert removed_name == "Bob"
-        assert pos == 2
-        assert len(sample_members) == 2
-        assert sample_members[0]["display_name"] == "Alice"
-        assert sample_members[1]["display_name"] == "Charlie"
-
-    def test_remove_by_position_first(self, domain_service: QueueDomainService, sample_members):
-        """Удаление первого пользователя."""
-        removed_name, pos = domain_service.remove_by_position(sample_members, 1)
-        assert removed_name == "Alice"
-        assert pos == 1
-        assert len(sample_members) == 2
-
-    def test_remove_by_position_last(self, domain_service: QueueDomainService, sample_members):
-        """Удаление последнего пользователя."""
-        removed_name, pos = domain_service.remove_by_position(sample_members, 3)
+    def test_pop_from_end(self, sample_queue):
+        """Удаление последнего пользователя (по умолчанию)."""
+        removed_name, pos = sample_queue.pop(2)
         assert removed_name == "Charlie"
         assert pos == 3
+        assert len(sample_queue.members) == 2
 
-    def test_remove_by_position_invalid(self, domain_service: QueueDomainService, sample_members):
+    def test_pop_at_specific_position(self, sample_queue):
+        """Удаление по конкретной позиции (0-индекс)."""
+        removed_name, pos = sample_queue.pop(0)
+        assert removed_name == "Alice"
+        assert pos == 1
+        assert len(sample_queue.members) == 2
+
+    def test_pop_from_middle(self, sample_queue):
+        """Удаление из середины очереди."""
+        removed_name, pos = sample_queue.pop(1)
+        assert removed_name == "Bob"
+        assert pos == 2
+        assert len(sample_queue.members) == 2
+
+    def test_pop_invalid_position(self, sample_queue):
         """Ошибка при удалении с невалидной позицией."""
         with pytest.raises(InvalidPositionError):
-            domain_service.remove_by_position(sample_members, 10)
+            sample_queue.pop(10)
 
-    def test_remove_by_position_zero(self, domain_service: QueueDomainService, sample_members):
-        """Ошибка при позиции 0."""
-        with pytest.raises(InvalidPositionError):
-            domain_service.remove_by_position(sample_members, 0)
-
-    def test_remove_from_empty_queue(self, domain_service: QueueDomainService):
+    def test_pop_from_empty_queue(self):
         """Ошибка при удалении из пустой очереди."""
-        with pytest.raises(InvalidPositionError):
-            domain_service.remove_by_position([], 1)
-
-    def test_remove_from_none_queue(self, domain_service: QueueDomainService):
-        """Обработка None в качестве очереди."""
+        queue = Queue(id="q1", name="Test Queue", members=[])
         with pytest.raises(MembersNotFoundError):
-            domain_service.remove_by_position(None, 1)
-
-
-class TestInsertAtPosition:
-    """Тесты для вставки пользователей в очередь."""
-
-    def test_insert_at_end(self, domain_service: QueueDomainService, sample_members):
-        """Вставка в конец очереди."""
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Diana", None)
-        assert user_name == "Diana"
-        assert desired_pos == 4
-        assert old_position is None
-        assert len(sample_members) == 4
-        assert sample_members[-1]["display_name"] == "Diana"
-
-    def test_insert_at_specific_position(self, domain_service: QueueDomainService, sample_members):
-        """Вставка в конкретную позицию."""
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Diana", 1)
-        assert user_name == "Diana"
-        assert desired_pos == 2
-        assert old_position is None
-        assert sample_members[1]["display_name"] == "Diana"
-        assert len(sample_members) == 4
-
-    def test_insert_at_beginning(self, domain_service: QueueDomainService, sample_members):
-        """Вставка в начало очереди."""
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Diana", 0)
-        assert desired_pos == 1
-        assert user_name == "Diana"
-        assert old_position is None
-        assert len(sample_members) == 4
-        assert sample_members[0]["display_name"] == "Diana"
-
-    def test_insert_duplicate_user(self, domain_service: QueueDomainService, sample_members):
-        """Повторная вставка существующего пользователя - перемещение."""
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Bob", 0)
-        assert user_name == "Bob"
-        assert desired_pos == 1
-        assert old_position == 2
-        assert len(sample_members) == 3
-        assert sample_members[0]["display_name"] == "Bob"
-
-    def test_insert_position_out_of_bounds_max(self, domain_service: QueueDomainService, sample_members):
-        """Вставка с позицией больше размера - должна вставить в конец."""
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Diana", 100)
-        assert user_name == "Diana"
-        assert desired_pos == 4
-        assert old_position is None
-        assert sample_members[-1]["display_name"] == "Diana"
-
-    def test_insert_position_negative(self, domain_service: QueueDomainService, sample_members):
-        """Отрицательная позиция - вставка в начало."""
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Diana", -10)
-        assert desired_pos == 1
-        assert sample_members[0]["display_name"] == "Diana"
-
-    def test_insert_into_empty_queue(self, domain_service: QueueDomainService):
-        """Вставка в пустую очередь."""
-        members = []
-        user_name, desired_pos, old_position = domain_service.insert_at_position(members, "Alice", None)
-        assert user_name == "Alice"
-        assert desired_pos == 1
-        assert old_position is None
-        assert len(members) == 1
-
-    def test_insert_into_none_queue(self, domain_service: QueueDomainService):
-        """Обработка None в качестве очереди."""
-        with pytest.raises(MembersNotFoundError):
-            domain_service.insert_at_position(None, "Alice", None)
+            queue.pop()
 
 
 class TestReplaceByPositions:
     """Тесты для обмена пользователей местами."""
 
-    def test_replace_valid_positions(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_valid_positions(self, sample_queue):
         """Обмен двух пользователей местами."""
-        pos1, pos2, name1, name2 = domain_service.replace_by_positions(sample_members, 1, 3)
+        pos1, pos2, name1, name2 = sample_queue.swap_by_position(0, 2)
         assert name1 == "Alice"
         assert name2 == "Charlie"
         assert pos1 == 1
         assert pos2 == 3
-        assert sample_members[0]["display_name"] == "Charlie"
-        assert sample_members[2]["display_name"] == "Alice"
+        assert sample_queue.members[0].display_name == "Charlie"
+        assert sample_queue.members[2].display_name == "Alice"
 
-    def test_replace_adjacent_positions(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_adjacent_positions(self, sample_queue):
         """Обмен соседних пользователей."""
-        pos1, pos2, name1, name2 = domain_service.replace_by_positions(sample_members, 1, 2)
-        assert sample_members[0]["display_name"] == "Bob"
-        assert sample_members[1]["display_name"] == "Alice"
+        pos1, pos2, name1, name2 = sample_queue.swap_by_position(0, 1)
+        assert sample_queue.members[0].display_name == "Bob"
+        assert sample_queue.members[1].display_name == "Alice"
 
-    def test_replace_same_positions_error(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_same_positions_error(self, sample_queue):
         """Ошибка при одинаковых позициях."""
         with pytest.raises(InvalidPositionError):
-            domain_service.replace_by_positions(sample_members, 1, 1)
+            sample_queue.swap_by_position(0, 0)
 
-    def test_replace_invalid_pos1(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_invalid_pos1(self, sample_queue):
         """Ошибка при невалидной первой позиции."""
         with pytest.raises(InvalidPositionError):
-            domain_service.replace_by_positions(sample_members, -1, 1)
+            sample_queue.swap_by_position(-1, 1)
 
-    def test_replace_invalid_pos2(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_invalid_pos2(self, sample_queue):
         """Ошибка при невалидной второй позиции."""
         with pytest.raises(InvalidPositionError):
-            domain_service.replace_by_positions(sample_members, 1, 10)
+            sample_queue.swap_by_position(0, 10)
 
 
 class TestReplaceByNames:
     """Тесты для обмена по именам пользователей."""
 
-    def test_replace_by_names_success(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_by_names_success(self, sample_queue):
         """Успешный обмен по именам."""
-        pos1, pos2, name1, name2 = domain_service.replace_by_names(sample_members, "Alice", "Charlie")
+        pos1, pos2, name1, name2 = sample_queue.swap_by_name("Alice", "Charlie")
         assert name1 == "Alice"
         assert name2 == "Charlie"
-        assert sample_members[0]["display_name"] == "Charlie"
-        assert sample_members[2]["display_name"] == "Alice"
+        assert sample_queue.members[0].display_name == "Charlie"
+        assert sample_queue.members[2].display_name == "Alice"
 
-    def test_replace_by_names_adjacent(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_by_names_adjacent(self, sample_queue):
         """Обмен соседних пользователей по именам."""
-        pos1, pos2, name1, name2 = domain_service.replace_by_names(sample_members, "Alice", "Bob")
-        assert sample_members[0]["display_name"] == "Bob"
-        assert sample_members[1]["display_name"] == "Alice"
+        pos1, pos2, name1, name2 = sample_queue.swap_by_name("Alice", "Bob")
+        assert sample_queue.members[0].display_name == "Bob"
+        assert sample_queue.members[1].display_name == "Alice"
 
-    def test_replace_by_names_first_not_found(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_by_names_first_not_found(self, sample_queue):
         """Ошибка если первого пользователя нет."""
         with pytest.raises(UserNotFoundError):
-            domain_service.replace_by_names(sample_members, "Unknown", "Alice")
+            sample_queue.swap_by_name("Unknown", "Alice")
 
-    def test_replace_by_names_second_not_found(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_by_names_second_not_found(self, sample_queue):
         """Ошибка если второго пользователя нет."""
         with pytest.raises(UserNotFoundError):
-            domain_service.replace_by_names(sample_members, "Alice", "Unknown")
+            sample_queue.swap_by_name("Alice", "Unknown")
 
-    def test_replace_by_names_both_not_found(self, domain_service: QueueDomainService, sample_members):
+    def test_swap_by_names_both_not_found(self, sample_queue):
         """Ошибка если обоих пользователей нет."""
         with pytest.raises(UserNotFoundError):
-            domain_service.replace_by_names(sample_members, "Unknown1", "Unknown2")
+            sample_queue.swap_by_name("Unknown1", "Unknown2")
 
-    def test_replace_by_names_multiword_names(self, domain_service: QueueDomainService):
+    def test_swap_by_names_multiword_names(self):
         """Обмен с многословными именами."""
-        members = [
-            {"user_id": 1, "display_name": "John Doe"},
-            {"user_id": 2, "display_name": "Jane Smith"},
-            {"user_id": 3, "display_name": "Bob Johnson"},
-        ]
-        domain_service.replace_by_names(members, "John Doe", "Bob Johnson")
-        assert members[0]["display_name"] == "Bob Johnson"
-        assert members[2]["display_name"] == "John Doe"
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="John Doe"),
+                Member(user_id=2, display_name="Jane Smith"),
+                Member(user_id=3, display_name="Bob Johnson"),
+            ],
+        )
+        pos1, pos2, name1, name2 = queue.swap_by_name("John Doe", "Bob Johnson")
+        assert queue.members[0].display_name == "Bob Johnson"
+        assert queue.members[2].display_name == "John Doe"
 
 
 class TestComplexScenarios:
     """Тесты для сложных сценариев работы с очередью."""
 
-    def test_remove_and_insert_sequence(self, domain_service: QueueDomainService, sample_members):
+    def test_remove_and_insert_sequence(self, sample_queue):
         """Последовательность удаления и вставки."""
-
         # Удаляем Bob
-        removed_name, position = domain_service.remove_by_name(sample_members, "Bob")
+        removed_name, position = sample_queue.remove("Bob")
         assert removed_name == "Bob"
         assert position == 2
-        assert len(sample_members) == 2
+        assert len(sample_queue.members) == 2
 
         # Вставляем его в начало
-        user_name, desired_pos, old_position = domain_service.insert_at_position(sample_members, "Bob", 0)
-        assert desired_pos == 1
-        assert sample_members[0]["display_name"] == "Bob"
+        old_pos, new_pos = sample_queue.insert("Bob", desired_pos=0, user_id=2)
+        assert new_pos == 1
+        assert sample_queue.members[0].display_name == "Bob"
 
-    def test_multiple_replacements(self, domain_service: QueueDomainService):
+    def test_multiple_swaps(self):
         """Несколько замен подряд."""
-        members = [
-            {"user_id": 1, "display_name": "Alice"},
-            {"user_id": 2, "display_name": "Bob"},
-            {"user_id": 3, "display_name": "Charlie"},
-            {"user_id": 4, "display_name": "Diana"},
-        ]
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=2, display_name="Bob"),
+                Member(user_id=3, display_name="Charlie"),
+                Member(user_id=4, display_name="Diana"),
+            ],
+        )
 
-        # Заменяем Alice и Bob
-        pos1, pos2, name1, name2 = domain_service.replace_by_positions(members, 1, 2)
-        assert members[0]["display_name"] == "Bob"
-        assert members[1]["display_name"] == "Alice"
+        # Меняем Alice и Bob
+        pos1, pos2, name1, name2 = queue.swap_by_position(0, 1)
+        assert queue.members[0].display_name == "Bob"
+        assert queue.members[1].display_name == "Alice"
 
-        # Заменяем Charlie и Diana
-        pos1, pos2, name1, name2 = domain_service.replace_by_positions(members, 2, 3)
-        assert members[1]["display_name"] == "Charlie"
-        assert members[2]["display_name"] == "Alice"
+        # Меняем Charlie и Diana
+        pos1, pos2, name1, name2 = queue.swap_by_position(2, 3)
+        assert queue.members[2].display_name == "Diana"
+        assert queue.members[3].display_name == "Charlie"
 
-    def test_insert_with_duplicate_then_remove(self, domain_service: QueueDomainService):
-        """Вставка дубликата и затем удаление оригинала."""
-        members = [
-            {"user_id": 1, "display_name": "Alice"},
-            {"user_id": 2, "display_name": "Bob"},
-        ]
+    def test_insert_with_duplicate_then_remove(self):
+        """Вставка дубликата и затем удаление."""
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=2, display_name="Bob"),
+            ],
+        )
 
         # Вставляем Alice в начало (она переместится)
-        user_name, desired_pos, old_position = domain_service.insert_at_position(members, "Alice", 0)
-        assert old_position == 1  # была на позиции 1
-        assert desired_pos == 1  # теперь на позиции 1
-        assert len(members) == 2
+        old_pos, new_pos = queue.insert("Alice", desired_pos=0)
+        assert old_pos == 1  # была на позиции 1
+        assert new_pos == 1  # теперь на позиции 1
+        assert len(queue.members) == 2
 
         # Теперь удаляем Alice
-        removed_name, position = domain_service.remove_by_name(members, "Alice")
+        removed_name, position = queue.remove("Alice")
         assert removed_name == "Alice"
-        assert len(members) == 1
-        assert members[0]["display_name"] == "Bob"
+        assert len(queue.members) == 1
+        assert queue.members[0].display_name == "Bob"

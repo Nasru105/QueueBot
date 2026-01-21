@@ -2,7 +2,9 @@
 Модуль для унифицированной обработки аргументов команд очереди.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
+
+from app.queues.models import Member, Queue
 
 
 class ArgumentParser:
@@ -18,7 +20,7 @@ class ArgumentParser:
             return False
 
     @staticmethod
-    def parse_queue_name(args: list[str], queues: dict[str, dict[str, Any]]) -> tuple[str, str, list[str]]:
+    def parse_queue_name(args: list[str], queues: dict[str, Queue]) -> tuple[str, str, list[str]]:
         """Ищет САМОЕ ДЛИННОЕ совпадение имени очереди.
 
         Returns: (queue_id, queue_name, rest_args)
@@ -28,7 +30,7 @@ class ArgumentParser:
 
         best_match = None
         best_i = 0
-        queue_names = {queue["name"]: queue["id"] for queue in queues.values()}
+        queue_names = {queue.name: queue.id for queue in queues.values()}
         for i in range(1, len(args) + 1):
             candidate = " ".join(args[:i])
             if candidate in queue_names:
@@ -40,7 +42,7 @@ class ArgumentParser:
         return None, None, args
 
     @staticmethod
-    def parse_users_names(args: List[str], members: List[dict]) -> Tuple[Optional[str], Optional[str]]:
+    def parse_users_names(args: List[str], members: List[Member]) -> Tuple[Optional[str], Optional[str]]:
         """
         Ищет два имени в очереди из аргументов.
         Возвращает (имя1, имя2) или (None, None)
@@ -49,12 +51,12 @@ class ArgumentParser:
             return None, None
 
         # Извлекаем все имена из очереди
-        queue_names = [user["display_name"] for user in members]
+        queue_names = [user.display_name for user in members]
 
         # Пробуем найти два разных имени
         for i in range(len(args) - 1):
-            name1 = " ".join(args[: i + 1])
-            name2 = " ".join(args[i + 1 :])
+            name1 = " ".join(args[: i + 1]).strip()
+            name2 = " ".join(args[i + 1 :]).strip()
 
             if name1 in queue_names and name2 in queue_names and name1 != name2:
                 return name1, name2
@@ -93,7 +95,7 @@ class ArgumentParser:
         return None, " ".join(args).strip()
 
     @staticmethod
-    def parse_replace_args(args: List[str], members_names: List[str]):
+    def parse_replace_args(args: List[str], members: List[Queue]):
         """
         Парсер для replace операции.
         Пытается вынуть две позиции: ["1", "2"]
@@ -115,32 +117,8 @@ class ArgumentParser:
             return pos1, pos2, None, None
         except (ValueError, IndexError):
             # Интерпретируем как имена
-            first_name, second_name = ArgumentParser.parse_replace_names(args, members_names)
+            first_name, second_name = ArgumentParser.parse_users_names(args, members)
             return None, None, first_name, second_name
-
-    @staticmethod
-    def parse_replace_names(args: List[str], members_names: List[dict]) -> Tuple[str, str]:
-        """Парсер для replace по именам.  Разбирает аргументы в два имени на основе членов очереди.
-
-        Returns:
-            (first_name, second_name)
-        """
-        if len(args) < 2:
-            return None, None
-
-        # Сложный случай: нужно понять где заканчивается первое имя и начинается второе
-        # Используем существующие имена в очереди для определения границы
-
-        # Пытаемся найти первое полное имя
-        for i in range(1, len(args)):
-            first_name = " ".join(args[:i]).strip()
-            if first_name in members_names:
-                second_name = " ".join(args[i:]).strip()
-                if second_name in members_names:
-                    return first_name, second_name
-
-        # Fallback: первое слово vs остальное
-        return None, None
 
     @staticmethod
     def parse_flags_args(args: List[str], target_flags: Dict[str, Optional[str]]) -> Tuple[List[str], Dict[str, str]]:

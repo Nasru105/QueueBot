@@ -2,7 +2,10 @@
 Тесты для моделей данных.
 """
 
-from app.queues.models import ActionContext, InsertResult, QueueEntity, RemoveResult, ReplaceResult
+import pytest
+
+from app.queues.errors import UserNotFoundError
+from app.queues.models import ActionContext, Member, Queue
 
 
 class TestActionContext:
@@ -42,149 +45,155 @@ class TestActionContext:
         assert ctx.queue_id == "new_queue"
 
 
-class TestQueueEntity:
-    """Тесты для QueueEntity."""
+class TestQueue:
+    """Тесты для Queue."""
 
-    def test_queue_entity_creation(self):
-        """Создание сущности очереди."""
-        items = [
-            {"user_id": 1, "display_name": "Alice"},
-            {"user_id": 2, "display_name": "Bob"},
+    def test_queue_creation(self):
+        """Создание очереди."""
+        members = [
+            Member(user_id=1, display_name="Alice"),
+            Member(user_id=2, display_name="Bob"),
         ]
-        queue = QueueEntity(
-            chat_id=123,
+        queue = Queue(
+            id="q1",
             name="Test Queue",
-            items=items,
+            members=members,
         )
-        assert queue.chat_id == 123
+        assert queue.id == "q1"
         assert queue.name == "Test Queue"
-        assert queue.items == items
+        assert len(queue.members) == 2
         assert queue.last_queue_message_id is None
 
-    def test_queue_entity_with_message_id(self):
+    def test_queue_with_message_id(self):
         """Создание очереди с ID последнего сообщения."""
-        queue = QueueEntity(
-            chat_id=123,
+        queue = Queue(
+            id="q1",
             name="Test Queue",
-            items=[],
+            members=[],
             last_queue_message_id=789,
         )
         assert queue.last_queue_message_id == 789
 
-    def test_queue_entity_with_empty_items(self):
+    def test_queue_with_empty_members(self):
         """Создание пустой очереди."""
-        queue = QueueEntity(
-            chat_id=123,
+        queue = Queue(
+            id="q1",
             name="Empty Queue",
-            items=[],
+            members=[],
         )
-        assert len(queue.items) == 0
+        assert len(queue.members) == 0
 
 
-class TestRemoveResult:
-    """Тесты для RemoveResult."""
+class TestQueueRemove:
+    """Тесты для удаления из очереди."""
 
-    def test_remove_result_successful(self):
+    def test_remove_successful(self):
         """Результат успешного удаления."""
-        queue = [
-            {"user_id": 2, "display_name": "Bob"},
-        ]
-        result = RemoveResult(
-            removed_name="Alice",
-            position=1,
-            updated_queue=queue,
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=2, display_name="Bob"),
+            ],
         )
-        assert result.removed_name == "Alice"
-        assert result.position == 1
-        assert len(result.updated_queue) == 1
+        removed_name, position = queue.remove("Alice")
+        assert removed_name == "Alice"
+        assert position == 1
+        assert len(queue.members) == 1
 
-    def test_remove_result_not_found(self):
-        """Результат когда пользователь не найден."""
-        result = RemoveResult(
-            removed_name=None,
-            position=None,
-            updated_queue=None,
-        )
-        assert result.removed_name is None
-        assert result.position is None
-        assert result.updated_queue is None
+    def test_remove_not_found(self):
+        """Ошибка при удалении несуществующего пользователя."""
+        queue = Queue(id="q1", name="Test Queue", members=[Member(user_id=1, display_name="Bob")])
+        with pytest.raises(UserNotFoundError):
+            queue.remove("Alice")
 
-    def test_remove_result_is_named_tuple(self):
-        """RemoveResult должна быть NamedTuple."""
-        result = RemoveResult("Alice", 1, [])
-        # Проверяем что можно обращаться как к кортежу
-        assert result[0] == "Alice"
-        assert result[1] == 1
+    def test_remove_from_single_member_queue(self):
+        """Удаление единственного пользователя."""
+        queue = Queue(id="q1", name="Test Queue", members=[Member(user_id=1, display_name="Alice")])
+        removed_name, position = queue.remove("Alice")
+        assert removed_name == "Alice"
+        assert position == 1
+        assert len(queue.members) == 0
 
 
-class TestInsertResult:
-    """Тесты для InsertResult."""
+class TestQueueInsert:
+    """Тесты для вставки в очередь."""
 
-    def test_insert_result_successful(self):
+    def test_insert_successful(self):
         """Результат успешной вставки."""
-        queue = [
-            {"user_id": None, "display_name": "Alice"},
-            {"user_id": 1, "display_name": "Bob"},
-        ]
-        result = InsertResult(
-            user_name="Alice",
-            position=1,
-            updated_queue=queue,
-            old_position=None,
+        queue = Queue(id="q1", name="Test Queue", members=[Member(user_id=1, display_name="Bob")])
+        old_position, position = queue.insert("Alice", user_id=2)
+        assert position == 2
+        assert old_position is None
+        assert len(queue.members) == 2
+        assert queue.members[-1].display_name == "Alice"
+
+    def test_insert_with_old_position(self):
+        """Результат вставки с перемещением (был в позиции 1, переместился на 2)."""
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=2, display_name="Bob"),
+            ],
         )
-        assert result.user_name == "Alice"
-        assert result.position == 1
-        assert result.old_position is None
-        assert len(result.updated_queue) == 2
+        old_position, position = queue.insert("Alice", desired_pos=1)
+        assert old_position == 1
+        assert position == 2
+        assert len(queue.members) == 2
 
-    def test_insert_result_with_old_position(self):
-        """Результат вставки с перемещением (был в позиции 3, переместился на 1)."""
-        queue = [
-            {"user_id": None, "display_name": "Alice"},
-            {"user_id": 2, "display_name": "Bob"},
-        ]
-        result = InsertResult(
-            user_name="Alice",
-            position=1,
-            updated_queue=queue,
-            old_position=3,
+    def test_insert_at_specific_position(self):
+        """Вставка в конкретную позицию."""
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=3, display_name="Charlie"),
+            ],
         )
-        assert result.old_position == 3
-        assert result.position == 1
-
-    def test_insert_result_is_named_tuple(self):
-        """InsertResult должна быть NamedTuple."""
-        result = InsertResult("Alice", 1, [], None)
-        assert result[0] == "Alice"
-        assert result[1] == 1
+        old_position, position = queue.insert("Bob", desired_pos=1, user_id=2)
+        assert position == 2
+        assert queue.members[1].display_name == "Bob"
 
 
-class TestReplaceResult:
-    """Тесты для ReplaceResult."""
+class TestQueueSwap:
+    """Тесты для обмена местами в очереди."""
 
-    def test_replace_result_successful(self):
+    def test_swap_by_position_successful(self):
         """Результат успешного обмена."""
-        queue = [
-            {"user_id": 3, "display_name": "Charlie"},
-            {"user_id": 2, "display_name": "Bob"},
-            {"user_id": 1, "display_name": "Alice"},
-        ]
-        result = ReplaceResult(
-            queue_name="Test Queue",
-            updated_queue=queue,
-            pos1=0,
-            pos2=2,
-            user1="Alice",
-            user2="Charlie",
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=2, display_name="Bob"),
+                Member(user_id=3, display_name="Charlie"),
+            ],
         )
-        assert result.queue_name == "Test Queue"
-        assert result.user1 == "Alice"
-        assert result.user2 == "Charlie"
-        assert result.pos1 == 0
-        assert result.pos2 == 2
+        pos1, pos2, name1, name2 = queue.swap_by_position(0, 2)
+        assert name1 == "Alice"
+        assert name2 == "Charlie"
+        assert pos1 == 1
+        assert pos2 == 3
+        assert queue.members[0].display_name == "Charlie"
+        assert queue.members[2].display_name == "Alice"
 
-    def test_replace_result_is_named_tuple(self):
-        """ReplaceResult должна быть NamedTuple."""
-        result = ReplaceResult("Queue", [], 0, 1, "User1", "User2")
-        assert result[0] == "Queue"
-        assert result[4] == "User1"
+    def test_swap_by_name_successful(self):
+        """Успешный обмен по именам."""
+        queue = Queue(
+            id="q1",
+            name="Test Queue",
+            members=[
+                Member(user_id=1, display_name="Alice"),
+                Member(user_id=2, display_name="Bob"),
+                Member(user_id=3, display_name="Charlie"),
+            ],
+        )
+        pos1, pos2, name1, name2 = queue.swap_by_name("Alice", "Charlie")
+        assert name1 == "Alice"
+        assert name2 == "Charlie"
+        assert queue.members[0].display_name == "Charlie"
+        assert queue.members[2].display_name == "Alice"

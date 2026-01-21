@@ -2,11 +2,12 @@ import asyncio
 import logging
 from datetime import datetime
 from functools import wraps
+from typing import List
 
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
 
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Member
 from app.services.logger import QueueLogger
 
 
@@ -49,12 +50,12 @@ def strip_user_full_name(user: User) -> str:
 
 
 # helper to check presence by user_id
-async def has_user(members, user_id, display_name):
+def has_user(members: List[Member], user_id, display_name):
     for user in members:
-        if user.get("user_id") == user_id:
+        if user.user_id == user_id:
             return True
-        elif user.get("display_name") == display_name and not user.get("user_id"):
-            user["user_id"] = user_id
+        elif user.display_name == display_name and not user.user_id:
+            user.user_id = user_id
             return True
     return False
 
@@ -88,7 +89,7 @@ async def is_user_admin(context, chat_id, user_id) -> bool:
         return False
 
 
-async def get_now():
+def get_now():
     # Возвращает datetime объект текущего времени (локальное)
     return datetime.now()
 
@@ -104,7 +105,7 @@ def parse_time_str(s: str) -> datetime:
     return datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
 
 
-async def get_now_formatted_time():
+def get_now_formatted_time():
     # Текущее время
     now = datetime.now()
     formatted_time = now.strftime("%d.%m.%Y %H:%M:%S")

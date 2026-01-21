@@ -1,5 +1,6 @@
 import pytest
 
+from app.queues.models import Member, Queue
 from app.services.argument_parser import ArgumentParser
 
 
@@ -13,18 +14,18 @@ def test_is_integer(arg, expected):
 @pytest.fixture
 def sample_queues():
     return {
-        "q1": {"id": "id1", "name": "queue"},
-        "q2": {"id": "id2", "name": "my queue"},
-        "q3": {"id": "id3", "name": "my queue long name"},
+        "id1": Queue(id="id1", name="queue"),
+        "id2": Queue(id="id2", name="my queue"),
+        "id3": Queue(id="id3", name="my queue long name"),
     }
 
 
 @pytest.fixture
 def sample_members():
     return [
-        {"display_name": "Alice"},
-        {"display_name": "Bob"},
-        {"display_name": "Charlie Chaplin"},
+        Member(user_id=None, display_name="Alice"),
+        Member(user_id=None, display_name="Bob"),
+        Member(user_id=None, display_name="Charlie Chaplin"),
     ]
 
 
@@ -88,36 +89,26 @@ def test_parse_remove_args(args, expected):
 @pytest.mark.parametrize(
     "args, members, expected",
     [
-        (["user1", "user2"], ["user1", "user2"], (None, None, "user1", "user2")),
-        (["First", "User", "Second", "User"], ["First User", "Second User"], (None, None, "First User", "Second User")),
+        (["user1", "user2"], [Member(None, "user1"), Member(None, "user2")], (None, None, "user1", "user2")),
+        (
+            ["First", "User", "Second", "User"],
+            [Member(None, "First User"), Member(None, "Second User")],
+            (None, None, "First User", "Second User"),
+        ),
         (
             ["First", "User", "Second", "User", "1", "2"],
-            ["First User", "Second User 1 2"],
+            [Member(None, "First User"), Member(None, "Second User 1 2")],
             (None, None, "First User", "Second User 1 2"),
         ),
         (["5", "2"], [], (5, 2, None, None)),
         (["5", "6", "2"], [], (None, None, None, None)),
         (["arg1"], ["arg1"], (None, None, None, None)),
-        (["user", "not", "in", "list"], ["some", "other"], (None, None, None, None)),
+        (["user", "not", "in", "list"], [Member(None, "some"), Member(None, "other")], (None, None, None, None)),
     ],
 )
 def test_parse_replace_args(args, members, expected):
     # Корректировка для последнего теста, чтобы он соответствовал логике
     assert ArgumentParser.parse_replace_args(args, members) == expected
-
-
-@pytest.mark.parametrize(
-    "args, members, expected",
-    [
-        (["user1", "user2"], ["user1", "user2"], ("user1", "user2")),
-        (["First", "User", "Second", "User"], ["First User", "Second User"], ("First User", "Second User")),
-        (["5", "2"], [], (None, None)),
-        (["arg1"], ["arg1"], (None, None)),
-        (["user", "not", "in", "list"], ["some", "other"], (None, None)),
-    ],
-)
-def test_parse_replace_names(args, members, expected):
-    assert ArgumentParser.parse_replace_names(args, members) == expected
 
 
 @pytest.mark.parametrize(

@@ -54,17 +54,20 @@ def fixed_now():
 
 @pytest.mark.asyncio
 class TestQueueAutoCleanupService:
-    async def test_schedule_expiration(self, service, mock_dependencies, sample_ctx, fixed_now):
+    async def test_schedule_expiration(
+        self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx, fixed_now
+    ):
         """Тест планирования удаления."""
         expires_in = 3600
 
-        with patch(f"{MODULE_PATH}.get_now", new_callable=AsyncMock) as mock_get_now:
-            mock_get_now.return_value = fixed_now
-
+        # ИСПРАВЛЕНИЕ 1: Патчим get_now, чтобы время совпадало с fixed_now.
+        # Используем обычный patch (MagicMock), так как get_now синхронный.
+        with patch(f"{MODULE_PATH}.get_now", return_value=fixed_now):
             await service.schedule_expiration(mock_dependencies["context"], sample_ctx, expires_in)
 
             # 1. Проверяем сохранение в БД
             expected_dt = fixed_now + timedelta(seconds=expires_in)
+
             mock_dependencies["repo"].set_queue_expiration.assert_awaited_once_with(
                 sample_ctx.chat_id, sample_ctx.queue_id, expected_dt
             )
@@ -79,7 +82,7 @@ class TestQueueAutoCleanupService:
             assert call_args[1]["data"]["ctx"] == sample_ctx
             assert call_args[1]["name"] == f"delete_{sample_ctx.chat_id}_{sample_ctx.queue_id}"
 
-    async def test_cancel_expiration(self, service, mock_dependencies, sample_ctx):
+    async def test_cancel_expiration(self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx):
         """Тест отмены запланированного удаления."""
         # Создаем мок задачи (Job)
         mock_job = MagicMock()
@@ -98,7 +101,7 @@ class TestQueueAutoCleanupService:
             sample_ctx.chat_id, sample_ctx.queue_id
         )
 
-    async def test_reschedule_expiration(self, service, mock_dependencies, sample_ctx):
+    async def test_reschedule_expiration(self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx):
         """Тест перепланирования (отмена + новая задача)."""
         new_time = 7200
 
@@ -117,7 +120,7 @@ class TestQueueAutoCleanupService:
             mock_dependencies["logger"].log.assert_awaited_once()
             assert "reschedule" in mock_dependencies["logger"].log.call_args[0][1]
 
-    async def test_get_remaining_time_from_job(self, service, mock_dependencies, sample_ctx):
+    async def test_get_remaining_time_from_job(self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx):
         """Тест получения времени из активного job."""
         mock_job = MagicMock()
         # Имитируем, что job сработает через 10 минут
@@ -136,7 +139,9 @@ class TestQueueAutoCleanupService:
         # Должно быть около 10 минут (с допуском на время выполнения теста)
         assert 590 <= result.total_seconds() <= 610
 
-    async def test_get_remaining_time_from_db(self, service, mock_dependencies, sample_ctx, fixed_now):
+    async def test_get_remaining_time_from_db(
+        self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx, fixed_now
+    ):
         """Тест получения времени из БД, если job не найден."""
         mock_dependencies["context"].job_queue.get_jobs_by_name.return_value = []
 
@@ -144,14 +149,13 @@ class TestQueueAutoCleanupService:
         db_expiration = fixed_now + timedelta(minutes=5)
         mock_dependencies["repo"].get_queue_expiration.return_value = db_expiration
 
-        with patch(f"{MODULE_PATH}.get_now", new_callable=AsyncMock) as mock_get_now:
-            mock_get_now.return_value = fixed_now
-
+        # ИСПРАВЛЕНИЕ 2: Убрали new_callable=AsyncMock.
+        # Теперь get_now() вернет datetime объект, а не корутину.
+        with patch(f"{MODULE_PATH}.get_now", return_value=fixed_now):
             result = await service.get_remaining_time(mock_dependencies["context"], sample_ctx)
-
             assert result == timedelta(minutes=5)
 
-    async def test_get_remaining_time_none(self, service, mock_dependencies, sample_ctx):
+    async def test_get_remaining_time_none(self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx):
         """Тест, если времени нет нигде."""
         mock_dependencies["context"].job_queue.get_jobs_by_name.return_value = []
         mock_dependencies["repo"].get_queue_expiration.return_value = None
@@ -160,7 +164,7 @@ class TestQueueAutoCleanupService:
 
         assert result == timedelta(seconds=0)
 
-    async def test_restore_all_expirations(self, service, mock_dependencies, fixed_now):
+    async def test_restore_all_expirations(self, service: QueueAutoCleanupService, mock_dependencies, fixed_now):
         """Тест восстановления задач при старте."""
         # Подготовка данных из БД
         mock_dependencies["repo"].get_all_chats_with_queues.return_value = [
@@ -175,6 +179,7 @@ class TestQueueAutoCleanupService:
         ]
 
         # Настройка возврата get_queue_expiration
+        # Настройка возврата get_queue_expiration
         async def get_exp_side_effect(chat_id, queue_id):
             if queue_id == "q1":
                 # Истекает через 1000 секунд
@@ -183,78 +188,64 @@ class TestQueueAutoCleanupService:
 
         mock_dependencies["repo"].get_queue_expiration.side_effect = get_exp_side_effect
 
-        # Мокаем app (он передается вместо context в этом методе)
         mock_app = MagicMock()
         mock_app.job_queue.run_once = MagicMock()
 
-        with patch(f"{MODULE_PATH}.get_now", new_callable=AsyncMock) as mock_get_now:
-            mock_get_now.return_value = fixed_now
-
+        # ИСПРАВЛЕНИЕ 2: Убрали new_callable=AsyncMock
+        with patch(f"{MODULE_PATH}.get_now", return_value=fixed_now):
             await service.restore_all_expirations(mock_app)
 
             # Должен быть вызван run_once только для q1
             mock_app.job_queue.run_once.assert_called_once()
             call_kwargs = mock_app.job_queue.run_once.call_args[1]
-
             assert call_kwargs["when"] == 1000.0
             assert call_kwargs["name"] == "delete_100_q1"
             assert call_kwargs["data"]["ctx"].queue_id == "q1"
 
-    async def test_expiration_job_executes_delete(self, service, mock_dependencies, sample_ctx, fixed_now):
+    async def test_expiration_job_executes_delete(
+        self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx, fixed_now
+    ):
         """Тест выполнения job: удаление очереди, так как она давно не обновлялась."""
-        # Настройка job data
         mock_job = MagicMock()
         mock_job.data = {"ctx": sample_ctx}
         mock_dependencies["context"].job = mock_job
 
-        # Очередь обновлялась 2 часа назад (условие < 1 час не сработает)
+        # Очередь обновлялась 2 часа назад
         last_modified = fixed_now - timedelta(hours=2)
         mock_dependencies["repo"].get_last_modified_time.return_value = last_modified
-
-        # Есть сообщение
         mock_dependencies["repo"].get_queue_message_id.return_value = 555
 
+        # ИСПРАВЛЕНИЕ 2: get_now обычный MagicMock, safe_delete остался AsyncMock
         with (
-            patch(f"{MODULE_PATH}.get_now", new_callable=AsyncMock) as mock_get_now,
+            patch(f"{MODULE_PATH}.get_now", return_value=fixed_now),
             patch(f"{MODULE_PATH}.safe_delete", new_callable=AsyncMock) as mock_safe_delete,
         ):
-            mock_get_now.return_value = fixed_now
-
             await service._expiration_job(mock_dependencies["context"])
 
-            # Проверки
-            # 1. Удаление сообщения
             mock_safe_delete.assert_awaited_once_with(mock_dependencies["context"].bot, sample_ctx, 555)
-
-            # 2. Удаление очереди из БД
             mock_dependencies["repo"].delete_queue.assert_awaited_once_with(sample_ctx.chat_id, sample_ctx.queue_id)
-
-            # 3. Лог
             assert "delete queue" in mock_dependencies["logger"].log.call_args[0][1]
-
-            # 4. Очистка expiration
             mock_dependencies["repo"].clear_queue_expiration.assert_awaited_once()
 
-    async def test_expiration_job_postpones(self, service, mock_dependencies, sample_ctx, fixed_now):
+    async def test_expiration_job_postpones(
+        self, service: QueueAutoCleanupService, mock_dependencies, sample_ctx, fixed_now
+    ):
         """Тест выполнения job: откладывание удаления, так как очередь активна."""
         mock_job = MagicMock()
         mock_job.data = {"ctx": sample_ctx}
         mock_dependencies["context"].job = mock_job
 
-        # Очередь обновлялась 10 минут назад (условие < 1 час сработает)
+        # Очередь обновлялась 10 минут назад
         last_modified = fixed_now - timedelta(minutes=10)
         mock_dependencies["repo"].get_last_modified_time.return_value = last_modified
 
+        # ИСПРАВЛЕНИЕ 2: get_now обычный MagicMock
         with (
-            patch(f"{MODULE_PATH}.get_now", new_callable=AsyncMock) as mock_get_now,
+            patch(f"{MODULE_PATH}.get_now", return_value=fixed_now),
             patch.object(service, "reschedule_expiration", new_callable=AsyncMock) as mock_reschedule,
         ):
-            mock_get_now.return_value = fixed_now
-
             await service._expiration_job(mock_dependencies["context"])
 
             # Должен перепланировать на час (3600 сек)
             mock_reschedule.assert_awaited_once_with(mock_dependencies["context"], sample_ctx, 3600)
-
-            # Удаление НЕ должно вызываться
             mock_dependencies["repo"].delete_queue.assert_not_awaited()

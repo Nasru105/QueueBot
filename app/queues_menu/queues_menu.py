@@ -16,7 +16,7 @@ async def handle_queues_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     # Показать очередь
     if action == "get":
         queue = await queue_service.repo.get_queue(ctx.chat_id, ctx.queue_id)
-        ctx.queue_name = queue["name"]
+        ctx.queue_name = queue.name
         expiration_time = await queue_service.repo.get_queue_expiration(ctx.chat_id, ctx.queue_id)
         expiration_time = expiration_time.strftime("%d.%m.%Y %H:%M:%S")
         text = escape_markdown(f"Действия с {ctx.queue_name}\n\nУдаление запланировано на {expiration_time}", version=2)

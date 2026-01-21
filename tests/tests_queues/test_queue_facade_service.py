@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from telegram import User
 
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Member, Queue
 from app.queues.service import QueueFacadeService
 from app.services.logger import QueueLogger
 
@@ -166,40 +166,40 @@ class TestQueueFacadeServiceRemoveFromQueue:
     async def test_remove_from_queue_by_position(self, facade_service: QueueFacadeService, mock_repo, action_context):
         """Удаление по позиции."""
         mock_repo.get_queue_by_name = AsyncMock(
-            return_value={
-                "id": "queue_1",
-                "members": [
-                    {"user_id": 1, "display_name": "Alice"},
-                    {"user_id": 2, "display_name": "Bob"},
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice", user_id=1),
+                    Member(display_name="Bob", user_id=2),
                 ],
-            }
+            )
         )
-        mock_repo.update_queue_members = AsyncMock()
+        mock_repo.update_queue = AsyncMock()
 
         removed_name, position = await facade_service.remove_from_queue(action_context, pos=2)
 
         assert removed_name == "Bob"
         assert position == 2
-        mock_repo.update_queue_members.assert_called_once()
+        mock_repo.update_queue.assert_called_once()
 
     async def test_remove_from_queue_by_name(self, facade_service: QueueFacadeService, mock_repo, action_context):
         """Удаление по имени."""
         mock_repo.get_queue_by_name = AsyncMock(
-            return_value={
-                "id": "queue_1",
-                "members": [
-                    {"user_id": 1, "display_name": "Alice"},
-                    {"user_id": 2, "display_name": "Bob"},
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice", user_id=1),
+                    Member(display_name="Bob", user_id=2),
                 ],
-            }
+            )
         )
-        mock_repo.update_queue_members = AsyncMock()
+        mock_repo.update_queue = AsyncMock()
 
         removed_name, position = await facade_service.remove_from_queue(action_context, user_name="Bob")
 
         assert removed_name == "Bob"
         assert position == 2
-        mock_repo.update_queue_members.assert_called_once()
+        mock_repo.update_queue.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -209,36 +209,58 @@ class TestQueueFacadeServiceInsertIntoQueue:
     async def test_insert_into_queue_at_position(self, facade_service: QueueFacadeService, mock_repo, action_context):
         """Вставка в конкретную позицию."""
         mock_repo.get_queue_by_name = AsyncMock(
-            return_value={
-                "id": "queue_1",
-                "members": [
-                    {"user_id": 1, "display_name": "Alice"},
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice", user_id=1),
                 ],
-            }
+            )
         )
-        mock_repo.update_queue_members = AsyncMock()
+        mock_repo.update_queue = AsyncMock()
 
-        user_name, desired_pos, old_position = await facade_service.insert_into_queue(action_context, "Bob", 0)
+        old_position, desired_pos = await facade_service.insert_into_queue(action_context, "Bob", 0)
 
-        assert user_name == "Bob"
-        mock_repo.update_queue_members.assert_called_once()
+        assert old_position is None
+        assert desired_pos == 1
+        mock_repo.update_queue.assert_called_once()
 
     async def test_insert_into_queue_at_end(self, facade_service: QueueFacadeService, mock_repo, action_context):
         """Вставка в конец очереди (без позиции)."""
         mock_repo.get_queue_by_name = AsyncMock(
-            return_value={
-                "id": "queue_1",
-                "members": [
-                    {"user_id": 1, "display_name": "Alice"},
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice", user_id=1),
                 ],
-            }
+            )
         )
-        mock_repo.update_queue_members = AsyncMock()
+        mock_repo.update_queue = AsyncMock()
 
-        user_name, desired_pos, old_position = await facade_service.insert_into_queue(action_context, "Bob")
+        old_position, desired_pos = await facade_service.insert_into_queue(action_context, "Bob")
 
-        assert user_name == "Bob"
-        mock_repo.update_queue_members.assert_called_once()
+        assert old_position is None
+        assert desired_pos == 2
+        mock_repo.update_queue.assert_called_once()
+
+    async def test_insert_into_queue_exist_member(self, facade_service: QueueFacadeService, mock_repo, action_context):
+        """Вставка в конец очереди (без позиции)."""
+        mock_repo.get_queue_by_name = AsyncMock(
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice", user_id=1),
+                    Member(display_name="Bob", user_id=2),
+                    Member(display_name="Chak", user_id=3),
+                ],
+            )
+        )
+        mock_repo.update_queue = AsyncMock()
+
+        old_position, desired_pos = await facade_service.insert_into_queue(action_context, "Bob", 3)
+
+        assert old_position == 2
+        assert desired_pos == 3
+        mock_repo.update_queue.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -248,40 +270,47 @@ class TestQueueFacadeServiceReplaceUsers:
     async def test_replace_users_by_name(self, facade_service: QueueFacadeService, mock_repo, action_context):
         """Обмен двух пользователей по именам."""
         mock_repo.get_queue_by_name = AsyncMock(
-            return_value={
-                "id": "queue_1",
-                "members": [
-                    {"user_id": 1, "display_name": "Alice"},
-                    {"user_id": 2, "display_name": "Bob"},
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice Alice", user_id=1),
+                    Member(display_name="Bob Bob", user_id=2),
                 ],
-            }
+            )
         )
-        mock_repo.update_queue_members = AsyncMock()
+        mock_repo.update_queue = AsyncMock()
 
-        pos1, pos2, name1, name2 = await facade_service.replace_users_queue(action_context, name1="Alice", name2="Bob")
+        pos1, pos2, name1, name2 = await facade_service.replace_users_queue(
+            action_context, name1="Alice Alice", name2="Bob Bob"
+        )
 
-        assert name1 == "Alice"
-        assert name2 == "Bob"
-        mock_repo.update_queue_members.assert_called_once()
+        assert name1 == "Alice Alice"
+        assert name2 == "Bob Bob"
+        assert pos1 == 1
+        assert pos2 == 2
+
+        mock_repo.update_queue.assert_called_once()
 
     async def test_replace_users_by_position(self, facade_service: QueueFacadeService, mock_repo, action_context):
         """Обмен по позициям."""
         mock_repo.get_queue_by_name = AsyncMock(
-            return_value={
-                "id": "queue_1",
-                "members": [
-                    {"user_id": 1, "display_name": "Alice"},
-                    {"user_id": 2, "display_name": "Bob"},
+            return_value=Queue(
+                id="queue_1",
+                members=[
+                    Member(display_name="Alice", user_id=1),
+                    Member(display_name="Bob", user_id=2),
                 ],
-            }
+            )
         )
-        mock_repo.update_queue_members = AsyncMock()
+        mock_repo.update_queue = AsyncMock()
 
         pos1, pos2, name1, name2 = await facade_service.replace_users_queue(action_context, 1, 2)
 
         assert name1 == "Alice"
         assert name2 == "Bob"
-        mock_repo.update_queue_members.assert_called_once()
+        assert pos1 == 1
+        assert pos2 == 2
+        mock_repo.update_queue.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -292,19 +321,30 @@ class TestQueueFacadeServiceUtilityMethods:
         """Генерация имени очереди."""
         mock_repo.get_all_queues = AsyncMock(
             return_value={
-                "q1": {"name": "Очередь 1", "members": []},
+                "q1": Queue(id="q1", name="Очередь 1", members=[Member(display_name="User1", user_id=1)]),
             }
         )
 
         result = await facade_service.generate_queue_name(123)
-        assert "Очередь" in result
+        assert "Очередь 2" in result
+
+    async def test_generate_queue_name_with_existing_members(self, facade_service: QueueFacadeService, mock_repo):
+        """Генерация имени очереди."""
+        mock_repo.get_all_queues = AsyncMock(
+            return_value={
+                "q1": Queue(id="q1", name="Очередь 1", members=[]),
+            }
+        )
+
+        result = await facade_service.generate_queue_name(123)
+        assert "Очередь 1" in result
 
     async def test_get_count_queues(self, facade_service: QueueFacadeService, mock_repo):
         """Получение количества очередей."""
         mock_repo.get_all_queues = AsyncMock(
             return_value={
-                "q1": {"name": "Queue 1"},
-                "q2": {"name": "Queue 2"},
+                "q1": Queue(id="q1", name="Queue 1", members=[]),
+                "q2": Queue(id="q2", name="Queue 2", members=[]),
             }
         )
 

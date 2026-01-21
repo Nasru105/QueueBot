@@ -24,7 +24,7 @@ class QueueAutoCleanupService:
     ):
         """Сохраняет время удаления в БД и планирует job"""
         # сохраняем в БД время удаления (datetime)
-        now = await get_now()
+        now = get_now()
         expiration_dt = now + timedelta(seconds=expires_in_seconds)
         await self.repo.set_queue_expiration(ctx.chat_id, ctx.queue_id, expiration_dt)
 
@@ -73,7 +73,7 @@ class QueueAutoCleanupService:
         if not expiration:
             return timedelta(seconds=0)
 
-        remaining = expiration - await get_now()
+        remaining = expiration - get_now()
         if remaining.total_seconds() < 0:
             return timedelta(seconds=0)
         return remaining
@@ -95,7 +95,7 @@ class QueueAutoCleanupService:
                 if not exp_dt:
                     continue
 
-                now = await get_now()
+                now = get_now()
                 delta = (exp_dt - now).total_seconds()
 
                 # сформируем ctx
@@ -113,7 +113,7 @@ class QueueAutoCleanupService:
         ctx.actor = "queue_expire_job"
 
         last_modified = await self.repo.get_last_modified_time(ctx.chat_id, ctx.queue_id)
-        now = await get_now()
+        now = get_now()
 
         # если очередь обновлялась в последний час — откладываем удаление ещё на час
         if last_modified and now - last_modified < timedelta(hours=1):

@@ -6,6 +6,7 @@ from telegram import Chat, Message, Update, User
 from telegram.ext import ContextTypes
 
 import app.commands.admin as admin_module
+from app.queues.models import Member, Queue
 
 
 @pytest.fixture
@@ -89,7 +90,7 @@ class TestAdminCommands:
         self.context.args = ["My", "Queue"]
 
         # Мок поиска очереди
-        admin_mocks["service"].repo.get_queue_by_name.return_value = {"id": "q1", "name": "My Queue"}
+        admin_mocks["service"].repo.get_queue_by_name.return_value = Queue(id="q1", name="My Queue")
         admin_mocks["service"].repo.get_queue_message_id.return_value = 999
 
         # Вызываем функцию из перезагруженного модуля
@@ -123,11 +124,9 @@ class TestAdminCommands:
     async def test_delete_all_queues(self, admin_mocks):
         admin_mocks["service"].repo.get_list_message_id.return_value = 100
         admin_mocks["service"].repo.get_all_queues.return_value = {
-            "q1": {"id": "q1", "name": "One"},
-            "q2": {"id": "q2", "name": "Two"},
+            "q1": Queue(id="q1", name="One", last_queue_message_id=101),
+            "q2": Queue(id="q2", name="Two", last_queue_message_id=102),
         }
-        # get_queue_message_id вызывается 2 раза (для q1 и q2)
-        admin_mocks["service"].repo.get_queue_message_id.side_effect = [101, 102]
 
         await admin_module.delete_all_queues(self.update, self.context, ctx=self.ctx)
 
@@ -200,7 +199,7 @@ class TestAdminCommands:
     async def test_replace_users(self, admin_mocks):
         self.context.args = ["Queue", "u1", "u2"]
         admin_mocks["service"].repo.get_all_queues.return_value = {
-            "q1": {"id": "q1", "members": [{"display_name": "u1"}, {"display_name": "u2"}]}
+            "q1": Queue(id="q1", members=[Member(user_id=1, display_name="u1"), Member(user_id=2, display_name="u2")])
         }
         admin_mocks["parser"].parse_queue_name.return_value = ("q1", "Queue", ["u1", "u2"])
         admin_mocks["parser"].parse_replace_args.return_value = (1, 2, "u1", "u2")
@@ -215,7 +214,7 @@ class TestAdminCommands:
     # ----------------------------------------------------------------
     async def test_rename_queue_success(self, admin_mocks):
         self.context.args = ["Old", "New"]
-        admin_mocks["service"].repo.get_all_queues.return_value = {"q1": {"name": "Old"}}
+        admin_mocks["service"].repo.get_all_queues.return_value = {"q1": Queue(id="q1", name="Old")}
         admin_mocks["parser"].parse_queue_name.return_value = ("q1", "Old", ["New"])
 
         await admin_module.rename_queue(self.update, self.context, ctx=self.ctx)
@@ -226,7 +225,10 @@ class TestAdminCommands:
 
     async def test_rename_queue_duplicate(self, admin_mocks):
         self.context.args = ["Old", "Existing"]
-        admin_mocks["service"].repo.get_all_queues.return_value = {"q1": {"name": "Old"}, "q2": {"name": "Existing"}}
+        admin_mocks["service"].repo.get_all_queues.return_value = {
+            "q1": Queue(id="q1", name="Old"),
+            "q2": Queue(id="q2", name="Existing"),
+        }
         admin_mocks["parser"].parse_queue_name.return_value = ("q1", "Old", ["Existing"])
 
         await admin_module.rename_queue(self.update, self.context, ctx=self.ctx)
@@ -240,7 +242,7 @@ class TestAdminCommands:
     # ----------------------------------------------------------------
     async def test_set_expire_time_success(self, admin_mocks):
         self.context.args = ["Queue", "5"]
-        admin_mocks["service"].repo.get_queue_by_name.return_value = {"id": "q1", "name": "Queue"}
+        admin_mocks["service"].repo.get_queue_by_name.return_value = Queue(id="q1", name="Queue")
 
         await admin_module.set_queue_expiration_time(self.update, self.context, ctx=self.ctx)
 

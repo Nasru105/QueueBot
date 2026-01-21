@@ -1,12 +1,13 @@
 # tests/test_queues_menu/test_queues_menu.py
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
-from telegram import Update, User, CallbackQuery, Message
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from telegram import CallbackQuery, Message, Update
 from telegram.ext import ContextTypes
 
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Queue
 from app.queues_menu.queues_menu import handle_queues_menu
 
 
@@ -45,7 +46,7 @@ class TestQueuesMenu:
     async def test_handle_queues_menu_get_action(self, setup_common):
         """Тест действия get для отображения очереди."""
         expiration_time = datetime(2025, 12, 31, 23, 59, 59)
-        queue_data = {"name": "Priority Queue", "members": ["user1", "user2"]}
+        queue_data = Queue(id="test_queue", name="Priority Queue", members=["user1", "user2"])
 
         with patch("app.queues_menu.queues_menu.queue_service") as mock_service:
             with patch("app.queues_menu.queues_menu.queue_menu_keyboard", new_callable=AsyncMock) as mock_keyboard:
@@ -67,7 +68,7 @@ class TestQueuesMenu:
     @pytest.mark.asyncio
     async def test_handle_queues_menu_get_sets_queue_name(self, setup_common):
         """Тест что queue_name устанавливается при действии get."""
-        queue_data = {"name": "Test Queue", "members": []}
+        queue_data = Queue(id="test_queue", name="Test Queue", members=[])
         expiration_time = datetime(2025, 12, 31, 23, 59, 59)
 
         with patch("app.queues_menu.queues_menu.queue_service") as mock_service:
@@ -85,7 +86,7 @@ class TestQueuesMenu:
     @pytest.mark.asyncio
     async def test_handle_queues_menu_get_formats_expiration_date(self, setup_common):
         """Тест форматирования даты истечения очереди."""
-        queue_data = {"name": "Test Queue", "members": []}
+        queue_data = Queue(id="test_queue", name="Test Queue", members=[])
         expiration_time = datetime(2025, 6, 15, 14, 30, 45)
 
         with patch("app.queues_menu.queues_menu.queue_service") as mock_service:
@@ -136,7 +137,7 @@ class TestQueuesMenu:
         expiration_time = datetime(2025, 12, 31, 23, 59, 59)
 
         for queue_name in ["Simple Queue", "Queue with spaces", "Очередь", "Q1"]:
-            queue_data = {"name": queue_name, "members": []}
+            queue_data = Queue(id="test_queue", name=queue_name, members=[])
 
             with patch("app.queues_menu.queues_menu.queue_service") as mock_service:
                 with patch("app.queues_menu.queues_menu.queue_menu_keyboard", new_callable=AsyncMock):

@@ -6,7 +6,7 @@ import pytest
 from telegram import CallbackQuery, Message, Update
 from telegram.ext import ContextTypes
 
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Queue
 from app.queues_menu.queue_menu import handle_queue_menu
 
 
@@ -56,7 +56,7 @@ class TestQueueMenu:
     @pytest.mark.asyncio
     async def test_handle_queue_menu_swap_action(self, setup_common):
         """Тест действия swap в меню очереди."""
-        queue_data = {"name": "Test Queue", "members": ["user1", "user2", "user3"]}
+        queue_data = Queue(id="test_queue", name="Test Queue", members=["user1", "user2", "user3"])
 
         with patch("app.queues_menu.queue_menu.queue_service") as mock_service:
             with patch("app.queues_menu.queue_menu.queue_swap_keyboard", new_callable=AsyncMock) as mock_keyboard:
@@ -73,7 +73,7 @@ class TestQueueMenu:
     @pytest.mark.asyncio
     async def test_handle_queue_menu_delete_action(self, setup_common):
         """Тест действия delete в меню очереди."""
-        queue_data = {"name": "Test Queue", "members": []}
+        queue_data = Queue(id="test_queue", name="Test Queue", members=[])
 
         with patch("app.queues_menu.queue_menu.queue_service") as mock_service:
             with patch("app.queues_menu.queue_menu.safe_delete", new_callable=AsyncMock) as mock_safe_delete:
@@ -90,10 +90,10 @@ class TestQueueMenu:
     @pytest.mark.asyncio
     async def test_handle_queue_menu_back_action(self, setup_common):
         """Тест действия back в меню очереди."""
-        queue_data = {"name": "Test Queue", "members": []}
+        queue_data = Queue(id="test_queue", name="Test Queue", members=[])
         queues_data = {
-            "q1": {"name": "Queue 1"},
-            "q2": {"name": "Queue 2"},
+            "q1": Queue(id="q1", name="Queue 1"),
+            "q2": Queue(id="q2", name="Queue 2"),
         }
 
         with patch("app.queues_menu.queue_menu.queue_service") as mock_service:
@@ -122,7 +122,7 @@ class TestQueueMenu:
     @pytest.mark.asyncio
     async def test_handle_queue_menu_sets_queue_name(self, setup_common):
         """Тест что queue_name корректно устанавливается."""
-        queue_data = {"name": "My Special Queue", "members": []}
+        queue_data = Queue(id="test_queue", name="My Special Queue", members=[])
 
         with patch("app.queues_menu.queue_menu.queue_service") as mock_service:
             mock_service.repo.get_queue = AsyncMock(return_value=queue_data)
@@ -136,7 +136,7 @@ class TestQueueMenu:
     @pytest.mark.asyncio
     async def test_handle_queue_menu_with_empty_members(self, setup_common):
         """Тест обработки очереди без членов."""
-        queue_data = {"name": "Empty Queue"}
+        queue_data = Queue(id="test_queue", name="Empty Queue", members=[])
 
         with patch("app.queues_menu.queue_menu.queue_service") as mock_service:
             with patch("app.queues_menu.queue_menu.queue_swap_keyboard", new_callable=AsyncMock) as mock_keyboard:

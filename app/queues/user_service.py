@@ -33,9 +33,8 @@ class UserService:
     async def clear_user_display_name(self, ctx, user: User, global_mode: bool = False):
         user_doc = await self.repo.get_user_display_name(user)
         chat_str = str(ctx.chat_id)
-        if "display_names" not in user_doc:
-            return
-        if global_mode:
+
+        if global_mode or "display_names" not in user_doc:
             user_doc["display_names"]["global"] = strip_user_full_name(user)
         else:
             user_doc["display_names"].pop(chat_str, None)

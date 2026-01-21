@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 from app.commands.admin import admins_only
 from app.queues.models import ActionContext
-from app.services.mongo_storage import log_collection
+from app.services.mongo_storage import mongo_db
 from app.utils.utils import delete_message_later, split_text, with_ctx
 
 
@@ -41,6 +41,7 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
     except Exception:
         count = 10
 
+    log_collection = mongo_db.db["log_data"]
     cursor = log_collection.find().sort("_id", -1).limit(count)
     logs = await cursor.to_list(length=count)
 

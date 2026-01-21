@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telegram import Update
 
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Member, Queue
 from app.queues.services.swap_service.swap_router import swap_router
 
 MODULE_PATH = "app.queues.services.swap_service.swap_router"
@@ -45,12 +45,14 @@ def mock_ctx():
 @pytest.fixture
 def sample_queue():
     """Создает пример очереди."""
-    return {
-        "members": [
-            {"user_id": 123, "display_name": "Alice"},
-            {"user_id": 456, "display_name": "Bob"},
-        ]
-    }
+    return Queue(
+        id="test_queue",
+        name="Test Queue",
+        members=[
+            Member(user_id=123, display_name="Alice"),
+            Member(user_id=456, display_name="Bob"),
+        ],
+    )
 
 
 @pytest.mark.asyncio
@@ -64,7 +66,7 @@ class TestSwapRouter:
             mock_request_swap.return_value = AsyncMock()
             # Настраиваем AsyncMock для вызываемого метода
             mock_queue_service.message_service.hide_queues_list_message = AsyncMock()
-
+            mock_context.bot.delete_message = AsyncMock()
             await swap_router(mock_update, mock_context, mock_ctx, sample_queue, args=["request", "456"])
 
             # Проверяем, что request_swap был вызван с правильными аргументами
@@ -72,14 +74,12 @@ class TestSwapRouter:
             call_args = mock_request_swap.call_args
             assert call_args[0][0] == mock_context
             assert call_args[0][1] == mock_ctx
-            assert call_args[0][2] == sample_queue["members"]
+            assert call_args[0][2] == sample_queue.members
             assert call_args[0][3] == mock_update.callback_query.from_user
             assert call_args[0][4] == "456"
 
             # Проверяем, что список был скрыт
-            mock_queue_service.message_service.hide_queues_list_message.assert_awaited_once_with(
-                mock_context, mock_ctx, 555
-            )
+            mock_context.bot.delete_message.assert_awaited_once_with(chat_id=999, message_id=555)
 
     async def test_swap_router_accept_action(self, mock_update, mock_context, mock_ctx, sample_queue):
         """Тест обработки действия accept (принятие обмена)."""
@@ -138,20 +138,22 @@ class TestSwapRouter:
             # Ничего не должно произойти
             mock_request_swap.assert_not_awaited()
             mock_respond_swap.assert_not_awaited()
+            mock_context.bot.delete_message.assert_not_awaited()
 
     async def test_swap_router_accept_still_deletes_when_false(self, mock_update, mock_context, mock_ctx, sample_queue):
-        """Тест, что сообщение удаляется даже если respond_swap вернул False (очистка меню)."""
+        """Тест, что сообщение не удаляется если respond_swap вернул False (очистка меню)."""
         with (
             patch(f"{MODULE_PATH}.respond_swap") as mock_respond_swap,
             patch(f"{MODULE_PATH}.queue_service") as mock_queue_service,
         ):
-            mock_respond_swap.return_value = AsyncMock(return_value=False)
+            mock_respond_swap.return_value = AsyncMock()
             mock_queue_service.update_queue_message = AsyncMock()
+            mock_respond_swap.return_value = False
 
             await swap_router(mock_update, mock_context, mock_ctx, sample_queue, args=["accept", "swap_123"])
 
             # Сообщение ДОЛЖНО быть удалено (меню убирается после действия)
-            mock_context.bot.delete_message.assert_awaited_once()
+            mock_context.bot.delete_message.assert_not_awaited()
 
     async def test_swap_router_decline_still_deletes_when_false(
         self, mock_update, mock_context, mock_ctx, sample_queue
@@ -167,7 +169,7 @@ class TestSwapRouter:
 
     async def test_swap_router_empty_members(self, mock_update, mock_context, mock_ctx):
         """Тест с пустым списком членов."""
-        queue = {"members": []}
+        queue = Queue(id="test_queue", name="Test Queue", members=[])
         with (
             patch(f"{MODULE_PATH}.request_swap") as mock_request_swap,
             patch(f"{MODULE_PATH}.queue_service") as mock_queue_service,
@@ -182,7 +184,7 @@ class TestSwapRouter:
 
     async def test_swap_router_queue_without_members_key(self, mock_update, mock_context, mock_ctx):
         """Тест с очередью без ключа members."""
-        queue = {}  # Нет ключа members
+        queue = Queue(id="test_queue", name="Test Queue")
         with (
             patch(f"{MODULE_PATH}.request_swap") as mock_request_swap,
             patch(f"{MODULE_PATH}.queue_service") as mock_queue_service,

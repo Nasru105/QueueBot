@@ -1,6 +1,7 @@
 import pytest
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.queues.models import Member
 from app.queues.services.swap_service.inline_keyboards import queue_swap_keyboard, swap_confirmation_keyboard
 
 
@@ -9,9 +10,9 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_basic(self):
         """Тест создания клавиатуры выбора членов для обмена."""
         members = [
-            {"user_id": 123, "display_name": "Alice"},
-            {"user_id": 456, "display_name": "Bob"},
-            {"user_id": 789, "display_name": "Charlie"},
+            Member(user_id=123, display_name="Alice"),
+            Member(user_id=456, display_name="Bob"),
+            Member(user_id=789, display_name="Charlie"),
         ]
         queue_id = "q1"
 
@@ -25,8 +26,8 @@ class TestQueueSwapKeyboard:
         for i, member in enumerate(members):
             button = keyboard.inline_keyboard[i][0]
             assert isinstance(button, InlineKeyboardButton)
-            assert button.text == member["display_name"]
-            assert button.callback_data == f"queue|{queue_id}|swap|request|{member['user_id']}"
+            assert button.text == member.display_name
+            assert button.callback_data == f"queue|{queue_id}|swap|request|{member.user_id}"
 
         # Проверяем нижние кнопки
         last_row = keyboard.inline_keyboard[-1]
@@ -39,7 +40,7 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_single_member(self):
         """Тест с одним членом."""
         members = [
-            {"user_id": 123, "display_name": "Alice"},
+            Member(user_id=123, display_name="Alice"),
         ]
         queue_id = "q1"
 
@@ -61,8 +62,8 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_member_without_user_id(self):
         """Тест пропуска членов без user_id."""
         members = [
-            {"display_name": "Unknown"},  # Нет user_id
-            {"user_id": 123, "display_name": "Alice"},
+            Member(display_name="Unknown"),  # Нет user_id
+            Member(user_id=123, display_name="Alice"),
         ]
         queue_id = "q1"
 
@@ -74,7 +75,7 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_member_without_display_name(self):
         """Тест использования user_id как имени если display_name отсутствует."""
         members = [
-            {"user_id": 123},  # Нет display_name
+            Member(user_id=123),  # Нет display_name
         ]
         queue_id = "q1"
 
@@ -86,7 +87,7 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_special_queue_id(self):
         """Тест с специальными символами в queue_id."""
         members = [
-            {"user_id": 123, "display_name": "Alice"},
+            Member(user_id=123, display_name="Alice"),
         ]
         queue_id = "q-1_special.id"
 
@@ -98,7 +99,7 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_large_number_of_members(self):
         """Тест с большим количеством членов."""
         members = [
-            {"user_id": i, "display_name": f"User{i}"}
+            Member(user_id=i, display_name=f"User{i}")
             for i in range(1, 51)  # 50 членов
         ]
         queue_id = "q1"
@@ -111,9 +112,9 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_preserves_order(self):
         """Тест что порядок членов сохраняется."""
         members = [
-            {"user_id": 789, "display_name": "Charlie"},
-            {"user_id": 123, "display_name": "Alice"},
-            {"user_id": 456, "display_name": "Bob"},
+            Member(user_id=789, display_name="Charlie"),
+            Member(user_id=123, display_name="Alice"),
+            Member(user_id=456, display_name="Bob"),
         ]
         queue_id = "q1"
 
@@ -127,7 +128,7 @@ class TestQueueSwapKeyboard:
     async def test_queue_swap_keyboard_user_id_zero(self):
         """Тест с user_id=0 (валидное значение)."""
         members = [
-            {"user_id": 0, "display_name": "SystemUser"},
+            Member(user_id=0, display_name="SystemUser"),
         ]
         queue_id = "q1"
 

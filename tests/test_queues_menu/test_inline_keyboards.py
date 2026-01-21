@@ -1,6 +1,7 @@
 import pytest
 from telegram import InlineKeyboardMarkup
 
+from app.queues.models import Queue
 from app.queues_menu.inline_keyboards import queue_menu_keyboard, queues_menu_keyboard
 
 
@@ -80,7 +81,7 @@ class TestInlineKeyboards:
 
     async def test_queues_menu_keyboard_single_queue(self):
         """Тест клавиатуры с одной очередью."""
-        queues = {"queue_1": {"name": "Test Queue 1"}}
+        queues = {"queue_1": Queue(id="queue_1", name="Test Queue 1")}
 
         keyboard = await queues_menu_keyboard(queues)
 
@@ -99,9 +100,9 @@ class TestInlineKeyboards:
     async def test_queues_menu_keyboard_multiple_queues(self):
         """Тест клавиатуры с несколькими очередями."""
         queues = {
-            "queue_1": {"name": "First Queue"},
-            "queue_2": {"name": "Second Queue"},
-            "queue_3": {"name": "Third Queue"},
+            "queue_1": Queue(id="queue_1", name="First Queue"),
+            "queue_2": Queue(id="queue_2", name="Second Queue"),
+            "queue_3": Queue(id="queue_3", name="Third Queue"),
         }
 
         keyboard = await queues_menu_keyboard(queues)
@@ -113,9 +114,9 @@ class TestInlineKeyboards:
     async def test_queues_menu_keyboard_queue_names(self):
         """Тест что имена очередей корректно отображаются."""
         queues = {
-            "q1": {"name": "Priority Queue"},
-            "q2": {"name": "Regular Queue"},
-            "q3": {"name": "Urgent Queue"},
+            "q1": Queue(id="q1", name="Priority Queue"),
+            "q2": Queue(id="q2", name="Regular Queue"),
+            "q3": Queue(id="q3", name="Urgent Queue"),
         }
 
         keyboard = await queues_menu_keyboard(queues)
@@ -129,7 +130,7 @@ class TestInlineKeyboards:
 
     async def test_queues_menu_keyboard_callback_data_structure(self):
         """Тест структуры callback_data для очередей."""
-        queues = {"test_queue_id": {"name": "Test Queue"}}
+        queues = {"test_queue_id": Queue(id="test_queue_id", name="Test Queue")}
 
         keyboard = await queues_menu_keyboard(queues)
 
@@ -144,9 +145,9 @@ class TestInlineKeyboards:
     async def test_queues_menu_keyboard_preserves_queue_order(self):
         """Тест что порядок очередей сохраняется."""
         queues = {
-            "q1": {"name": "First"},
-            "q2": {"name": "Second"},
-            "q3": {"name": "Third"},
+            "q1": Queue(id="q1", name="First"),
+            "q2": Queue(id="q2", name="Second"),
+            "q3": Queue(id="q3", name="Third"),
         }
 
         keyboard = await queues_menu_keyboard(queues)
@@ -162,7 +163,7 @@ class TestInlineKeyboards:
     async def test_queues_menu_keyboard_hide_button_always_present(self):
         """Тест что кнопка Скрыть всегда присутствует и в конце."""
         for num_queues in [0, 1, 5, 10]:
-            queues = {f"q{i}": {"name": f"Queue {i}"} for i in range(num_queues)}
+            queues = {f"q{i}": Queue(id=f"q{i}", name=f"Queue {i}") for i in range(num_queues)}
             keyboard = await queues_menu_keyboard(queues)
 
             # Последняя кнопка - Скрыть

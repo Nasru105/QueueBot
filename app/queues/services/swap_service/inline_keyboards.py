@@ -1,12 +1,16 @@
+from typing import List
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.queues.models import Member
 
-async def queue_swap_keyboard(members, queue_id):
+
+async def queue_swap_keyboard(members: List[Member], queue_id):
     keyboard = []
     for user in members:
-        if user.get("user_id") is not None:
-            text = user.get("display_name") or str(user.get("user_id"))
-            cb = f"queue|{queue_id}|swap|request|{user.get('user_id')}"
+        if user.user_id is not None:
+            text = user.display_name or str(user.user_id)
+            cb = f"queue|{queue_id}|swap|request|{user.user_id}"
             button = InlineKeyboardButton(text=f"{text}", callback_data=cb)
             keyboard.append([button])
 

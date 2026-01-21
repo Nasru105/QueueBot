@@ -1,19 +1,37 @@
 # queue/mongo_storage.py
+import logging
 import os
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-load_dotenv()
-
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-print(MONGO_URL)
+from app.services.logger import logger
 
 
-DB_NAME = "queue_bot"
+class MongoDatabase:
+    def __init__(self):
+        load_dotenv()
+        self.mongo_url = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+        self.db_name = "queue_bot"
+        self.client: AsyncIOMotorClient = None
+        self.db = None
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
-queue_collection = db["queue_data"]
-user_collection = db["user_data"]
-log_collection = db["log_data"]
+    def connect(self):
+        """Создает подключение"""
+        self.client = AsyncIOMotorClient(self.mongo_url)
+        self.db = self.client[self.db_name]
+        logger.log(logging.INFO, f"Connected to MongoDB: {self.mongo_url}")
+
+    def close(self):
+        """Закрывает подключение"""
+        if self.client:
+            self.client.close()
+
+    async def ensure_indexes(self):
+        """Создаёт уникальный индекс по chat_id"""
+        await self.db["queue_data"].create_index("chat_id", unique=True)
+        logger.log(logging.INFO, "Создание индексов")
+
+
+mongo_db = MongoDatabase()
+mongo_db.connect()

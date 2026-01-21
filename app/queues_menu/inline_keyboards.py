@@ -20,7 +20,7 @@ async def queue_menu_keyboard(queue_id: int):
 async def queues_menu_keyboard(queues: Dict[str, Dict[str, Any]]):
     keyboard = []
     for queue_id, queue in queues.items():
-        button = InlineKeyboardButton(text=f"{queue['name']}", callback_data=f"menu|queues|{queue_id}|get")
+        button = InlineKeyboardButton(text=f"{queue.name}", callback_data=f"menu|queues|{queue_id}|get")
 
         keyboard.append([button])
     keyboard.append([InlineKeyboardButton(text="⏸️ Скрыть", callback_data="menu|queues|all|hide")])

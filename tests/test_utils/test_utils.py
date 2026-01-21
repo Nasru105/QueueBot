@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.queues.models import ActionContext
+from app.queues.models import ActionContext, Member
 from app.utils.utils import has_user, is_user_admin, parse_time_str, safe_delete, strip_user_full_name
 
 
@@ -31,14 +31,14 @@ def test_strip_user_full_name(user_data, expected):
 @pytest.mark.parametrize(
     "members, user_id, display_name, expected",
     [
-        ([{"user_id": 123, "display_name": "Alice"}], 123, "Alice", True),
-        ([{"user_id": 123, "display_name": "Alice"}], 456, "Charlie", False),
-        ([{"user_id": 123, "display_name": "Alice"}], 456, "Alice", False),
-        ([{"display_name": "Bob"}], 456, "Bob", True),
+        ([Member(user_id=123, display_name="Alice")], 123, "Alice", True),
+        ([Member(user_id=123, display_name="Alice")], 456, "Charlie", False),
+        ([Member(user_id=123, display_name="Alice")], 456, "Alice", False),
+        ([Member(user_id=None, display_name="Bob")], 456, "Bob", True),
     ],
 )
 async def test_has_user(members, user_id, display_name, expected):
-    assert await has_user(members, user_id, display_name) == expected
+    assert has_user(members, user_id, display_name) == expected
 
 
 @pytest.mark.asyncio
