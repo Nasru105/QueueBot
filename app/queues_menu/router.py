@@ -1,5 +1,3 @@
-import logging
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -22,7 +20,7 @@ async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         _, menu_type, queue_id, action = query.data.split("|")
         ctx.queue_id = queue_id
     except Exception:
-        QueueLogger.log(ctx, "Invalid menu callback", level=logging.WARNING)
+        QueueLogger.log(ctx, "Invalid menu callback", level="WARNING")
         return
 
     try:
@@ -31,6 +29,6 @@ async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         elif menu_type == "queues":
             await handle_queues_menu(update, context, ctx, action)
         else:
-            QueueLogger.log(ctx, f"Unknown menu type: {menu_type}", level=logging.WARNING)
+            QueueLogger.log(ctx, f"Unknown menu type: {menu_type}", level="WARNING")
     except QueueError:
         await queue_service.message_service.hide_queues_list_message(context, ctx, query.message.message_id)

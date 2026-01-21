@@ -67,7 +67,6 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         await delete_message_later(context, ctx, "Нет активных очередей")
 
 
-@with_ctx
 async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext, global_mode=False) -> None:
     """Устанавливает отображаемое имя пользователя в очередях."""
     user = update.effective_user

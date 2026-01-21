@@ -1,14 +1,14 @@
 import importlib
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from telegram import CallbackQuery, Message, Update
 from telegram.ext import ContextTypes
-from app.queues.errors import QueueError
-from app.queues.models import ActionContext
 
 # Импортируем модуль целиком, чтобы перезагружать его
 import app.queues_menu.router as router_module
+from app.queues.errors import QueueError
+from app.queues.models import ActionContext
 
 
 @pytest.fixture
@@ -100,7 +100,7 @@ class TestMenuRouter:
 
             mock_logger.log.assert_called_once()
             call_kwargs = mock_logger.log.call_args[1]
-            assert call_kwargs["level"] == logging.WARNING
+            assert call_kwargs["level"] == "WARNING"
 
     async def test_menu_router_insufficient_callback_parts(self, setup_common, bypass_decorator):
         """Тест callback с недостаточным количеством частей."""

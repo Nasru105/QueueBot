@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import datetime
 from functools import wraps
 from typing import List
@@ -65,7 +64,7 @@ async def safe_delete(bot, ctx: ActionContext, message_id):
     try:
         await bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
     except Exception as e:
-        await QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level=logging.WARNING)
+        await QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level="WARNING")
 
 
 async def delete_later(context, ctx, message_id, time=5):

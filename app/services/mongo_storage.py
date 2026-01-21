@@ -1,5 +1,4 @@
 # queue/mongo_storage.py
-import logging
 import os
 
 from dotenv import load_dotenv
@@ -20,7 +19,7 @@ class MongoDatabase:
         """Создает подключение"""
         self.client = AsyncIOMotorClient(self.mongo_url)
         self.db = self.client[self.db_name]
-        logger.log(logging.INFO, f"Connected to MongoDB: {self.mongo_url}")
+        logger.log("INFO", f"Connected to MongoDB: {self.mongo_url}")
 
     def close(self):
         """Закрывает подключение"""
@@ -30,7 +29,7 @@ class MongoDatabase:
     async def ensure_indexes(self):
         """Создаёт уникальный индекс по chat_id"""
         await self.db["queue_data"].create_index("chat_id", unique=True)
-        logger.log(logging.INFO, "Создание индексов")
+        logger.log("INFO", "Создание индексов")
 
 
 mongo_db = MongoDatabase()

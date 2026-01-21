@@ -1,5 +1,3 @@
-import logging
-
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -42,7 +40,7 @@ class QueueMessageService:
             await self.repo.set_queue_message_id(ctx.chat_id, ctx.queue_id, sent.message_id)
             return sent.message_id
         except Exception as ex:
-            await self.logger.log(ctx, f"send failed: {type(ex).__name__}: {ex}", level=logging.ERROR)
+            await self.logger.log(ctx, f"send failed: {type(ex).__name__}: {ex}", level="ERROR")
             raise MessageServiceError(ex)
 
     async def edit_queue_message(self, context: ContextTypes.DEFAULT_TYPE, ctx, text: str, keyboard):
@@ -68,11 +66,11 @@ class QueueMessageService:
             # игнорируем "Message is not modified"
             if "not modified" in str(ex).lower():
                 return msg_id
-            await self.logger.log(ctx, f"edit failed (BadRequest): {ex}", level=logging.ERROR)
+            await self.logger.log(ctx, f"edit failed (BadRequest): {ex}", level="ERROR")
             raise MessageServiceError(ex)
         except Exception as ex:
             # log and fallback to sending new message (if bot context available)
-            await self.logger.log(ctx, f"edit failed: {ex}", level=logging.ERROR)
+            await self.logger.log(ctx, f"edit failed: {ex}", level="ERROR")
             if context:
                 sent = await context.bot.send_message(
                     chat_id=ctx.chat_id,

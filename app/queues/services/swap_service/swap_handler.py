@@ -1,5 +1,3 @@
-import logging
-
 from telegram import User
 from telegram.ext import ContextTypes
 
@@ -112,5 +110,5 @@ async def respond_swap(context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext, u
 
     except Exception as ex:
         await swap_service.delete_swap(swap_id)
-        await QueueLogger.log(ctx, action=f"{ex}", level=logging.WARNING)
+        await QueueLogger.log(ctx, action=f"{ex}", level="WARNING")
         raise

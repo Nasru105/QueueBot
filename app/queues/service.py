@@ -1,4 +1,3 @@
-import logging
 from typing import Optional
 
 from telegram import User
@@ -37,7 +36,7 @@ class QueueFacadeService:
             await self.auto_cleanup_service.schedule_expiration(context, ctx, expires_in)
             await self.logger.log(ctx, "create queue")
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
         return queue_id
 
     async def delete_queue(self, context, ctx: ActionContext):
@@ -47,7 +46,7 @@ class QueueFacadeService:
             await self.logger.log(ctx, "delete queue")
 
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def join_to_queue(self, ctx: ActionContext, user: User) -> int:
         try:
@@ -57,7 +56,7 @@ class QueueFacadeService:
                 await self.logger.joined(ctx, display_name, position)
             return position
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def leave_from_queue(self, ctx: ActionContext, user: User) -> int:
         try:
@@ -67,7 +66,7 @@ class QueueFacadeService:
                 await self.logger.leaved(ctx, display_name, position)
             return position
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def insert_into_queue(
         self, ctx: ActionContext, user_name: str, desired_pos: int = None
@@ -76,16 +75,16 @@ class QueueFacadeService:
             queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
             ctx.queue_id = queue.id
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
             return None, None
 
         try:
             old_position, new_position = queue.insert(user_name, desired_pos)
         except InvalidPositionError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
             return None, None
         except Exception as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.ERROR)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "ERROR")
             return None, None
 
         if new_position:
@@ -102,7 +101,7 @@ class QueueFacadeService:
             queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
             ctx.queue_id = queue.id
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
             return None, None
 
         try:
@@ -112,10 +111,10 @@ class QueueFacadeService:
                 removed_name, position = queue.remove(user_name)
 
         except InvalidPositionError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
             return None, None
         except Exception as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.ERROR)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "ERROR")
             return None, None
 
         if removed_name:
@@ -130,7 +129,7 @@ class QueueFacadeService:
             queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
             ctx.queue_id = queue.id
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
             return None, None, None, None
 
         try:
@@ -139,10 +138,10 @@ class QueueFacadeService:
             elif name1 is not None and name2 is not None:
                 pos1, pos2, name1, name2 = queue.swap_by_name(name1, name2)
         except (InvalidPositionError, UserNotFoundError) as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
             return None, None, None, None
         except Exception as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.ERROR)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "ERROR")
             return None, None, None, None
 
         await self.repo.update_queue(ctx.chat_id, queue)
@@ -156,7 +155,7 @@ class QueueFacadeService:
             keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
             return await self.message_service.send_queue_message(ctx, text, keyboard, context)
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def update_queue_message(self, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
         try:
@@ -170,14 +169,14 @@ class QueueFacadeService:
             keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
             return await self.message_service.edit_queue_message(context, ctx, text, keyboard)
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def rename_queue(self, ctx: ActionContext, new_name: str):
         try:
             await self.repo.rename_queue(ctx.chat_id, ctx.queue_name, new_name)
             await self.logger.log(ctx, f"rename queue {ctx.queue_name} → {new_name}")
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def generate_queue_name(self, chat_id: int) -> str:
         queues = await self.repo.get_all_queues(chat_id)
@@ -192,7 +191,7 @@ class QueueFacadeService:
             return await self.user_service.get_user_display_name(user, chat_id)
         except QueueError as ex:
             # Fallback to raw user if any error
-            await self.logger.log(None, f"ERROR getting display name: {ex}", logging.WARNING)
+            await self.logger.log(None, f"ERROR getting display name: {ex}", "WARNING")
             return None
 
     async def set_user_display_name(self, ctx, user, display_name: str, global_mode=False):
@@ -200,7 +199,7 @@ class QueueFacadeService:
             await self.user_service.set_user_display_name(ctx, user, display_name, global_mode)
             await self.logger.log(ctx, f"set display name → {display_name}")
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def clear_user_display_name(self, ctx, user, global_mode=False):
         try:
@@ -208,11 +207,11 @@ class QueueFacadeService:
             await self.logger.log(ctx, "clear display name")
             return user_display_name
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def set_queue_description(self, ctx: ActionContext, description):
         try:
             await self.repo.set_queue_description(ctx.chat_id, ctx.queue_id, description)
             await self.logger.log(ctx, "set description")
         except QueueError as ex:
-            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", logging.WARNING)
+            await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
