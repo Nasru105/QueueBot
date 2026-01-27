@@ -15,13 +15,13 @@ class MongoDatabase:
         self.client: AsyncIOMotorClient = None
         self.db = None
 
-    def connect(self):
+    async def connect(self):
         """Создает подключение"""
         self.client = AsyncIOMotorClient(self.mongo_url)
         self.db = self.client[self.db_name]
         logger.log("INFO", f"Connected to MongoDB: {self.mongo_url}")
 
-    def close(self):
+    async def close(self):
         """Закрывает подключение"""
         if self.client:
             self.client.close()
@@ -30,7 +30,3 @@ class MongoDatabase:
         """Создаёт уникальный индекс по chat_id"""
         await self.db["queue_data"].create_index("chat_id", unique=True)
         logger.log("INFO", "Создание индексов")
-
-
-mongo_db = MongoDatabase()
-mongo_db.connect()

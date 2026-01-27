@@ -4,8 +4,8 @@ from functools import wraps
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
-from app.queues import queue_service
 from app.queues.models import ActionContext
+from app.queues.service import QueueFacadeService
 from app.services.argument_parser import ArgumentParser
 from app.utils.utils import delete_message_later, is_user_admin, safe_delete, with_ctx
 
@@ -39,6 +39,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
         await delete_message_later(context, ctx, "Использование: \n /delete <Имя очереди>")
         return
 
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     queue_name = " ".join(context.args)
     queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
     if not queue:
@@ -60,6 +61,8 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
 @admins_only
 async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     # Удаляем меню
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
+
     last_list_message_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_list_message_id:
         await safe_delete(context.bot, ctx, last_list_message_id)
@@ -82,6 +85,7 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
     if len(args) < 2:
         await delete_message_later(context, ctx, "Использование: \n /insert <Имя очереди> <Имя пользователя> [позиция]")
         return
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     queue_id, queue_name, rest_args = ArgumentParser.parse_queue_name(args, queues)
@@ -107,6 +111,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
             context, ctx, "Использование:\n /remove <Имя очереди> <Имя пользователя или Позиция>"
         )
         return
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     queue_id, queue_name, rest_args = ArgumentParser.parse_queue_name(args, queues)
@@ -138,6 +143,7 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
             "Использование:\n/replace <Очередь> <Позиция 1> <Позиция 2> или \n/replace <Очередь> <Имя 1> <Имя 2>",
         )
         return
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     queue_id, queue_name, rest_names = ArgumentParser.parse_queue_name(args, queues)
@@ -161,6 +167,7 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     if len(args) < 2:
         await delete_message_later(context, ctx, "Использование: /rename <Старое имя> <Новое имя>")
         return
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     queue_id, old_name, rest_args = ArgumentParser.parse_queue_name(args, queues)
@@ -200,6 +207,7 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
             await delete_message_later(context, ctx, "Время должно быть не менее 1 часа.")
             return
 
+        queue_service: QueueFacadeService = context.bot_data["queue_service"]
         queue_name = " ".join(context.args[:-1])
         queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
         ctx.queue_name = queue_name
@@ -212,7 +220,7 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
         ctx.queue_id = queue.id
 
         # Устанавливаем новое время
-        await queue_service.auto_cleanup_service.reschedule_expiration(context, ctx, hours * 3600)
+        await queue_service.auto_cleanup_service.reschedule_expiration(ctx, hours * 3600)
 
         await delete_message_later(
             context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} ч."
@@ -229,6 +237,7 @@ async def set_queue_description(update: Update, context: ContextTypes.DEFAULT_TY
         await delete_message_later(context, ctx, "Использование: \n /set_description <Имя очереди> [описание]")
         return
 
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     queues = await queue_service.repo.get_all_queues(ctx.chat_id)
     queue_id, queue_name, rest = ArgumentParser.parse_queue_name(context.args, queues)
     ctx.queue_name = queue_name

@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import List
 
@@ -31,6 +31,7 @@ def with_ctx(func):
             await safe_delete(context.bot, ctx, message_id)
 
         kwargs["ctx"] = ctx
+
         return await func(update, context, *args, **kwargs)
 
     return wrapper
@@ -90,7 +91,7 @@ async def is_user_admin(context, chat_id, user_id) -> bool:
 
 def get_now():
     # Возвращает datetime объект текущего времени (локальное)
-    return datetime.now()
+    return datetime.now(timezone(timedelta(hours=3)))
 
 
 def parse_time_str(s: str) -> datetime:
@@ -106,7 +107,7 @@ def parse_time_str(s: str) -> datetime:
 
 def get_now_formatted_time():
     # Текущее время
-    now = datetime.now()
+    now = get_now()
     formatted_time = now.strftime("%d.%m.%Y %H:%M:%S")
     return formatted_time
 

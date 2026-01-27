@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.queues import queue_service
 from app.queues.models import ActionContext
+from app.queues.service import QueueFacadeService
 from app.queues_menu.inline_keyboards import queues_menu_keyboard
 from app.services.argument_parser import ArgumentParser
 from app.utils.utils import delete_message_later, safe_delete, with_ctx
@@ -14,10 +14,11 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     Создаёт новую очередь.
     Имя: из аргументов или автогенерация.
     """
-    flags = {"-h": None}
+    flags = {"-h": 0, "-s": 0}
 
     args_parts, parsed_flags = ArgumentParser.parse_flags_args(context.args, flags)
 
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     # Определяем имя очереди
     if args_parts:
         queue_name = " ".join(args_parts)
@@ -26,7 +27,13 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     ctx.queue_name = queue_name
 
     try:
-        expires_in_seconds = int(parsed_flags["-h"]) * 3600 if parsed_flags.get("-h") else 86400
+        hours = int(parsed_flags.get("-h") or 0)
+        seconds = int(parsed_flags.get("-s") or 0)
+
+        expires_in_seconds = (hours * 3600) + seconds
+
+        if expires_in_seconds == 0:
+            expires_in_seconds = 86400
     except (ValueError, TypeError):
         await delete_message_later(context, ctx, "параметр -h должен быть целым числом, обозначающим часы")
         return
@@ -47,6 +54,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     """
 
     # Удаляем старое меню
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_queues_id:
         await safe_delete(context.bot, ctx, last_queues_id)
@@ -72,6 +80,7 @@ async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
     user = update.effective_user
     args = context.args
     user_display_name = " ".join(args) if args else None
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
     if user_display_name:
         await queue_service.set_user_display_name(ctx, user, user_display_name, global_mode)

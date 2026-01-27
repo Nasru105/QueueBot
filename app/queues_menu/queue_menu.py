@@ -2,8 +2,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.queues import queue_service
 from app.queues.models import ActionContext
+from app.queues.service import QueueFacadeService
 from app.queues.services.swap_service.inline_keyboards import queue_swap_keyboard
 from app.queues_menu.inline_keyboards import queues_menu_keyboard
 from app.utils.utils import delete_message_later, safe_delete
@@ -11,6 +11,7 @@ from app.utils.utils import delete_message_later, safe_delete
 
 async def handle_queue_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext, action: str):
     query = update.callback_query
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     queue = await queue_service.repo.get_queue(ctx.chat_id, ctx.queue_id)
     if not queue:
         await delete_message_later(context, ctx, "Невозможно выполнить действие.")

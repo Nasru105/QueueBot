@@ -1,44 +1,28 @@
-import os
 import sys
-import time
+from functools import partial
 
 from loguru import logger
 
 from app.queues.models import ActionContext
 
-# 1. Настройка времени
-if os.name != "nt":
-    os.environ["TZ"] = "Europe/Moscow"
-    time.tzset()
-
-# 2. Очищаем старые хендлеры
 logger.remove()
 
-# 3. Настраиваем значения по умолчанию для extra-полей
-# Это предотвратит KeyError, если мы просто вызовем logger.info("message")
 logger.configure(extra={"chat_title": "-", "queue": "-", "actor": "-"})
 
-# 4. Добавляем вывод в консоль
 logger.add(
     sys.stdout,
-    # Используем безопасный доступ к extra
     format="<green>{time:DD.MM.YYYY HH:mm:ss}</green> | <level>{level: <8}</level> | {extra[chat_title]} | {extra[queue]} | <cyan>{message}</cyan>",
     level="INFO",
     enqueue=True,
 )
 
 
-async def mongo_sink(message):
+async def mongo_sink(mongo_db, message):
     try:
-        from .mongo_storage import mongo_db
-
         record = message.record
-
-        # Безопасное получение полей через .get()
         extra = record.get("extra", {})
-
         document = {
-            "timestamp": record["time"],
+            "timestamp": record["time"].strftime("%Y-%m-%d %H:%M:%S"),
             "level": record["level"].name,
             "message": record["message"],
             "chat_title": extra.get("chat_title", "-"),
@@ -47,15 +31,16 @@ async def mongo_sink(message):
         }
         await mongo_db.db["log_data"].insert_one(document)
     except Exception as e:
-        # Используем sys.stderr напрямую, чтобы не рекурсивно вызывать логгер
         print(f"Mongo logging error: {e}", file=sys.stderr)
 
 
-def setup_logger():
+async def setup_logger(mongo_db):
     """Вызывается из bot.py после старта Event Loop"""
     try:
-        logger.add(mongo_sink, level="INFO", enqueue=True)
-        # Тестовое сообщение, чтобы проверить, что все работает
+        mongo_sink_with_db = partial(mongo_sink, mongo_db)
+
+        logger.add(mongo_sink_with_db, level="INFO", enqueue=True)
+
         logger.info("Система логирования инициализирована")
     except Exception as e:
         logger.error(f"Failed to setup Mongo logging: {e}")

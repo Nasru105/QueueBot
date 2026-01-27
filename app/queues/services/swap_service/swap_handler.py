@@ -1,7 +1,6 @@
 from telegram import User
 from telegram.ext import ContextTypes
 
-from app.queues import queue_service
 from app.queues.models import ActionContext, Member
 from app.queues.services.swap_service.inline_keyboards import swap_confirmation_keyboard
 from app.queues.services.swap_service.swap_service import swap_service

@@ -2,8 +2,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
 
-from app.queues import queue_service
 from app.queues.models import ActionContext
+from app.queues.service import QueueFacadeService
 from app.queues_menu.inline_keyboards import queue_menu_keyboard
 
 
@@ -12,6 +12,7 @@ async def handle_queues_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     Обрабатывает нажатие кнопок списка всех очередей (get/delete/hide).
     """
     query = update.callback_query
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
     # Показать очередь
     if action == "get":

@@ -27,29 +27,25 @@ def mock_dependencies(mocker, bypass_decorator):
     Создает моки.
     Зависит от bypass_decorator, чтобы патчи применялись к уже ПЕРЕЗАГРУЖЕННОМУ модулю.
     """
-    # 1. Патчим queue_service внутри app.commands.queue
-    mock_service = mocker.patch("app.commands.queue.queue_service", autospec=True)
-
-    # Гарантируем, что методы возвращают то, что можно await-ить (AsyncMock)
+    # 1. Создаем мок для queue_service напрямую, так как он, скорее всего,
+    #    извлекается из контекста, а не является глобальным объектом модуля.
+    mock_service = AsyncMock()
     mock_service.create_queue = AsyncMock()
     mock_service.generate_queue_name = AsyncMock()
     mock_service.send_queue_message = AsyncMock()
     mock_service.set_user_display_name = AsyncMock()
     mock_service.clear_user_display_name = AsyncMock()
-
     # Для репозитория
-    mock_service.repo = MagicMock()
+    mock_service.repo = AsyncMock()
     mock_service.repo.get_list_message_id = AsyncMock()
     mock_service.repo.get_all_queues = AsyncMock()
     mock_service.repo.set_list_message_id = AsyncMock()
 
     # 2. Патчим ArgumentParser
     mock_arg_parser = mocker.patch("app.commands.queue.ArgumentParser", autospec=True)
-
     # 3. Патчим утилиты
     mock_delete_message_later = mocker.patch("app.commands.queue.delete_message_later", new_callable=AsyncMock)
     mock_safe_delete = mocker.patch("app.commands.queue.safe_delete", new_callable=AsyncMock)
-
     # 4. Патчим клавиатуру
     mocker.patch("app.commands.queue.queues_menu_keyboard", new_callable=AsyncMock)
 
@@ -64,22 +60,24 @@ def mock_dependencies(mocker, bypass_decorator):
 @pytest.mark.asyncio
 class TestQueueCommands:
     @pytest.fixture(autouse=True)
-    def setup_common(self):
+    def setup_common(self, mock_dependencies):
         """Создает общие объекты Update, Context и ActionContext для каждого теста."""
-        self.update = MagicMock(spec=Update)
-        self.update.effective_user = MagicMock(spec=User)
+        self.update = AsyncMock(spec=Update)
+        self.update.effective_user = AsyncMock(spec=User)
         self.update.effective_user.username = "test_user"
-
-        self.context = MagicMock(spec=ContextTypes.DEFAULT_TYPE)
-        self.context.bot = AsyncMock()
+        self.context = AsyncMock(spec=ContextTypes.DEFAULT_TYPE)
         self.context.args = []
-
-        self.ctx = MagicMock()  # Mock для ActionContext
+        # --- THIS IS THE FIX ---
+        # Инъекция асинхронного мока в контекст, который будет использоваться в тестах
+        self.context.bot_data = {"queue_service": mock_dependencies["queue_service"]}
+        self.context.bot = AsyncMock()  # Mock the bot object
+        self.context.bot.send_message = AsyncMock()  # Mock the send_message method
+        # -----------------------
+        self.ctx = AsyncMock()
         self.ctx.chat_id = 123
         self.ctx.thread_id = None
         self.ctx.chat_title = "Test Chat"
         self.ctx.queue_name = None
-        # По умолчанию ID очереди может быть None или строкой, зависит от логики, ставим заглушку
         self.ctx.queue_id = None
 
     # ----------------------------------------------------------------
@@ -90,23 +88,17 @@ class TestQueueCommands:
         """Тест создания очереди с явно указанным именем."""
         # Настройка
         self.context.args = ["My", "Queue"]
-
         # Мокаем парсер
         mock_dependencies["arg_parser"].parse_flags_args.return_value = (["My", "Queue"], {"-h": None})
-
         # Мокаем создание очереди (возвращает ID)
         mock_dependencies["queue_service"].create_queue.return_value = "q_id_1"
-
         # Действие: вызываем функцию из ПЕРЕЗАГРУЖЕННОГО модуля
         await queue_module.create(self.update, self.context, ctx=self.ctx)
-
         # Проверка
         assert self.ctx.queue_name == "My Queue"
         assert self.ctx.queue_id == "q_id_1"
-
         # Проверяем вызов create_queue с дефолтным временем (86400 сек) и НАШИМ ctx
         mock_dependencies["queue_service"].create_queue.assert_awaited_once_with(self.context, self.ctx, 86400)
-
         # Проверяем отправку сообщения
         mock_dependencies["queue_service"].send_queue_message.assert_awaited_once_with(self.ctx, self.context)
 
@@ -116,12 +108,9 @@ class TestQueueCommands:
         mock_dependencies["arg_parser"].parse_flags_args.return_value = ([], {})
         mock_dependencies["queue_service"].generate_queue_name.return_value = "AutoName #1"
         mock_dependencies["queue_service"].create_queue.return_value = "q_id_1"
-
         await queue_module.create(self.update, self.context, ctx=self.ctx)
-
         # Теперь вызывается с 123, так как мы передали наш self.ctx с chat_id=123
         mock_dependencies["queue_service"].generate_queue_name.assert_awaited_once_with(self.ctx.chat_id)
-
         assert self.ctx.queue_name == "AutoName #1"
 
     async def test_create_with_flag_h(self, mock_dependencies, bypass_decorator):
@@ -129,18 +118,14 @@ class TestQueueCommands:
         self.context.args = ["Name", "-h", "2"]
         mock_dependencies["arg_parser"].parse_flags_args.return_value = (["Name"], {"-h": "2"})
         mock_dependencies["queue_service"].create_queue.return_value = "q_id_1"
-
         await queue_module.create(self.update, self.context, ctx=self.ctx)
-
         # 2 часа * 3600 = 7200 секунд. Проверяем, что передан именно self.ctx
         mock_dependencies["queue_service"].create_queue.assert_awaited_once_with(self.context, self.ctx, 7200)
 
     async def test_create_invalid_flag(self, mock_dependencies, bypass_decorator):
         """Тест ошибки, если -h не число."""
         mock_dependencies["arg_parser"].parse_flags_args.return_value = (["Name"], {"-h": "invalid"})
-
         await queue_module.create(self.update, self.context, ctx=self.ctx)
-
         mock_dependencies["queue_service"].create_queue.assert_not_awaited()
         mock_dependencies["delete_message_later"].assert_awaited_once()
         assert "должен быть целым числом" in mock_dependencies["delete_message_later"].call_args[0][2]
@@ -149,9 +134,7 @@ class TestQueueCommands:
         """Тест, если очередь уже существует (create_queue вернул None/False)."""
         mock_dependencies["arg_parser"].parse_flags_args.return_value = (["Existing"], {})
         mock_dependencies["queue_service"].create_queue.return_value = None
-
         await queue_module.create(self.update, self.context, ctx=self.ctx)
-
         mock_dependencies["delete_message_later"].assert_awaited_once()
         assert "уже существет" in mock_dependencies["delete_message_later"].call_args[0][2]
         mock_dependencies["queue_service"].send_queue_message.assert_awaited_once()
@@ -164,19 +147,15 @@ class TestQueueCommands:
         """Тест отображения списка очередей."""
         mock_dependencies["queue_service"].repo.get_list_message_id.return_value = 555
         mock_dependencies["queue_service"].repo.get_all_queues.return_value = ["q1", "q2"]
-
         sent_message = MagicMock()
         sent_message.message_id = 777
         self.context.bot.send_message.return_value = sent_message
-
         await queue_module.queues(self.update, self.context, ctx=self.ctx)
-
         mock_dependencies["safe_delete"].assert_awaited_once()
         call_args = mock_dependencies["safe_delete"].call_args[0]
         assert call_args[0] == self.context.bot
         assert call_args[1] == self.ctx  # Теперь это совпадает
         assert call_args[2] == 555
-
         self.context.bot.send_message.assert_awaited_once()
         assert mock_dependencies["queue_service"].repo.set_list_message_id.await_count >= 1
 
@@ -184,9 +163,7 @@ class TestQueueCommands:
         """Тест, если очередей нет."""
         mock_dependencies["queue_service"].repo.get_list_message_id.return_value = None
         mock_dependencies["queue_service"].repo.get_all_queues.return_value = []
-
         await queue_module.queues(self.update, self.context, ctx=self.ctx)
-
         self.context.bot.send_message.assert_not_awaited()
         mock_dependencies["delete_message_later"].assert_awaited_once()
         assert "Нет активных очередей" in mock_dependencies["delete_message_later"].call_args[0][2]
@@ -198,17 +175,13 @@ class TestQueueCommands:
     async def test_chat_nickname_set(self, mock_dependencies, bypass_decorator):
         """Тест установки локального никнейма."""
         self.context.args = ["Big", "Boss"]
-
         await queue_module.chat_nickname(self.update, self.context, ctx=self.ctx)
-
         mock_dependencies["queue_service"].set_user_display_name.assert_awaited_once()
         call_args = mock_dependencies["queue_service"].set_user_display_name.call_args
-
         assert call_args[0][0] == self.ctx
         assert call_args[0][1] == self.update.effective_user
         assert call_args[0][2] == "Big Boss"
         assert call_args[0][3] is False
-
         mock_dependencies["delete_message_later"].assert_awaited_once()
         assert "Установлено отображаемое имя" in mock_dependencies["delete_message_later"].call_args[0][2]
 
@@ -216,15 +189,10 @@ class TestQueueCommands:
         """Тест сброса глобального никнейма (без аргументов)."""
         self.context.args = []
         mock_dependencies["queue_service"].clear_user_display_name.return_value = "StandardName"
-
         await queue_module.global_nickname(self.update, self.context, ctx=self.ctx)
-
         mock_dependencies["queue_service"].clear_user_display_name.assert_awaited_once()
         call_args = mock_dependencies["queue_service"].clear_user_display_name.call_args
-
         assert call_args[0][0] == self.ctx
         assert call_args[0][1] == self.update.effective_user
         assert call_args[0][2] is True
-
-        mock_dependencies["delete_message_later"].assert_awaited_once()
-        assert "Сброшено глобальное" in mock_dependencies["delete_message_later"].call_args[0][2]
+        mock_dependencies["delete_message_later"].ass

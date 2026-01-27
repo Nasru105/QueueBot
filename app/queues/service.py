@@ -20,20 +20,20 @@ class QueueFacadeService:
     Компоненты (repo, presenter, message_service ...) инжектируются через конструктор.
     """
 
-    def __init__(self, repo, logger=QueueLogger):
+    def __init__(self, bot, repo, logger, scheduler):
         self.repo: QueueRepository = repo
         self.presenter = QueuePresenter()
         self.message_service = QueueMessageService(repo, logger)
         self.user_service = UserService(repo)
-        self.auto_cleanup_service = QueueAutoCleanupService(repo, logger)
-        self.logger = logger
+        self.auto_cleanup_service = QueueAutoCleanupService(bot, repo, scheduler, logger)
+        self.logger: QueueLogger = logger
 
     # ------ queue management (thin orchestrations) ------
     async def create_queue(self, context, ctx: ActionContext, expires_in):
         try:
             queue_id = await self.repo.create_queue(ctx.chat_id, ctx.chat_title, ctx.queue_name)
             ctx.queue_id = queue_id
-            await self.auto_cleanup_service.schedule_expiration(context, ctx, expires_in)
+            await self.auto_cleanup_service.schedule_expiration(ctx, expires_in)
             await self.logger.log(ctx, "create queue")
         except QueueError as ex:
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
@@ -41,8 +41,8 @@ class QueueFacadeService:
 
     async def delete_queue(self, context, ctx: ActionContext):
         try:
+            await self.auto_cleanup_service.cancel_expiration(ctx)
             await self.repo.delete_queue(ctx.chat_id, ctx.queue_id)
-            await self.auto_cleanup_service.cancel_expiration(context, ctx)
             await self.logger.log(ctx, "delete queue")
 
         except QueueError as ex:

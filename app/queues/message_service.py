@@ -88,6 +88,5 @@ class QueueMessageService:
     async def hide_queues_list_message(self, context, ctx, last_queues_id=None):
         if not last_queues_id:
             last_queues_id = await self.repo.get_list_message_id(ctx.chat_id)
-        if last_queues_id:
-            await safe_delete(context.bot, ctx, last_queues_id)
-            await self.repo.clear_list_message_id(ctx.chat_id)
+        await safe_delete(context.bot, ctx, last_queues_id)
+        await self.repo.clear_list_message_id(ctx.chat_id)

@@ -26,8 +26,8 @@ class QueueRepository:
             await self.queue_collection.insert_one(doc)
         return doc
 
-    async def update_chat(self, chat_id: int, update: Dict[str, Any]):
-        await self.queue_collection.update_one({"chat_id": chat_id}, {"$set": update}, upsert=True)
+    async def update_chat(self, chat_id: int, update: Dict[str, Any], upsert=True):
+        await self.queue_collection.update_one({"chat_id": chat_id}, {"$set": update}, upsert=upsert)
 
     async def get_queue(self, chat_id: int, queue_id: int) -> Queue:
         doc = await self.get_chat(chat_id)
@@ -101,7 +101,7 @@ class QueueRepository:
 
         queues[queue_id] = new_queue
 
-        await self.update_chat(chat_id, {"queues": queues})
+        await self.update_chat(chat_id, doc)
         return queue_id
 
     async def delete_queue(self, chat_id: int, queue_id: str) -> bool:
@@ -177,7 +177,7 @@ class QueueRepository:
         await self.update_chat(chat_id, {"last_list_message_id": msg_id})
 
     async def clear_list_message_id(self, chat_id: int):
-        await self.update_chat(chat_id, {"last_list_message_id": None})
+        await self.update_chat(chat_id, {"last_list_message_id": None}, upsert=False)
 
     async def get_queue_description(self, chat_id: int, queue_id: int) -> Optional[int]:
         doc = await self.get_chat(chat_id)
@@ -200,7 +200,7 @@ class QueueRepository:
         await self.update_chat(chat_id, {f"queues.{queue_id}.expiration": expiration})
 
     async def clear_queue_expiration(self, chat_id: int, queue_id: str):
-        await self.update_chat(chat_id, {f"queues.{queue_id}.expiration": None})
+        await self.update_chat(chat_id, {f"queues.{queue_id}.expiration": None}, upsert=False)
 
     async def get_all_chats_with_queues(self) -> list[dict]:
         """Возвращает список документов: {'chat_id': int, 'chat_title': str, 'queues': {...}}"""

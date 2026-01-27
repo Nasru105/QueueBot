@@ -34,4 +34,5 @@ Thumbs.db
 
 .coverage
 main.py
+test.py
 ToDo

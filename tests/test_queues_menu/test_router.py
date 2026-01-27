@@ -123,16 +123,22 @@ class TestMenuRouter:
     async def test_menu_router_handles_queue_error(self, setup_common, bypass_decorator):
         """Тест обработки QueueError."""
         setup_common["update"].callback_query.data = "menu|queue|123|refresh"
+
+        # Мокируем handle_queue_menu, чтобы он выбрасывал ошибку
         with patch("app.queues_menu.router.handle_queue_menu", new_callable=AsyncMock) as mock_handler:
-            with patch("app.queues_menu.router.queue_service") as mock_service:
-                mock_handler.side_effect = QueueError("Test error")
-                mock_service.message_service.hide_queues_list_message = AsyncMock()
+            mock_handler.side_effect = QueueError("Test error")
 
-                await bypass_decorator.menu_router(
-                    setup_common["update"], setup_common["context"], ctx=setup_common["ctx"]
-                )
+            # Мокируем queue_service внутри context.bot_data
+            mock_queue_service = AsyncMock()
+            mock_queue_service.message_service.hide_queues_list_message = AsyncMock()
 
-                mock_service.message_service.hide_queues_list_message.assert_called_once()
+            # Подменяем bot_data в контексте
+            setup_common["context"].bot_data = {"queue_service": mock_queue_service}
+
+            await bypass_decorator.menu_router(setup_common["update"], setup_common["context"], ctx=setup_common["ctx"])
+
+            # Проверяем, что метод был вызван
+            mock_queue_service.message_service.hide_queues_list_message.assert_called_once()
 
     async def test_menu_router_extracts_queue_id_correctly(self, setup_common, bypass_decorator):
         """Тест корректного извлечения queue_id."""

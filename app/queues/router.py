@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.queues import queue_service
 from app.queues.models import ActionContext
+from app.queues.service import QueueFacadeService
 from app.queues.services.swap_service.swap_router import swap_router
 from app.services.locks import get_chat_lock
 from app.utils.utils import has_user, with_ctx
@@ -21,6 +21,7 @@ async def queue_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     _, queue_id, action = args[0:3]
     rest_args = args[3:]
 
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     queue = await queue_service.repo.get_queue(ctx.chat_id, queue_id)
     ctx.queue_name = queue.name
     ctx.queue_id = queue_id

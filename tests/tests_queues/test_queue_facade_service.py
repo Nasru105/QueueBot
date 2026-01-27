@@ -9,28 +9,6 @@ from telegram import User
 
 from app.queues.models import ActionContext, Member, Queue
 from app.queues.service import QueueFacadeService
-from app.services.logger import QueueLogger
-
-
-@pytest.fixture
-def mock_repo():
-    """Мок репозитория."""
-    repo = AsyncMock()
-    return repo
-
-
-@pytest.fixture
-def mock_logger():
-    """Мок логгера."""
-    logger = AsyncMock(spec=QueueLogger)
-    return logger
-
-
-@pytest.fixture
-def facade_service(mock_repo, mock_logger):
-    """Фикстура для создания фасада сервиса с моками."""
-    service = QueueFacadeService(mock_repo, logger=mock_logger)
-    return service
 
 
 @pytest.fixture

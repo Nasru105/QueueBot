@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.queues import queue_service
 from app.queues.models import ActionContext, Queue
+from app.queues.service import QueueFacadeService
 from app.queues.services.swap_service.swap_handler import request_swap, respond_swap
 
 
@@ -11,6 +11,7 @@ async def swap_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
     user = query.from_user
     action, target = args
     members = queue.members
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
     is_delete = False
 
     if action == "request" and target:
