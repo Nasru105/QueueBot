@@ -137,13 +137,12 @@ class QueueAutoCleanupService:
 
         last_modified = await self.repo.get_last_modified_time(ctx.chat_id, ctx.queue_id)
         now = get_now()
-
+        print(last_modified, now, now - last_modified)
         # если очередь обновлялась в последний час — откладываем удаление ещё на час
         if last_modified and now - last_modified < timedelta(hours=1):
             await self.reschedule_expiration(ctx, 3600)
             return
 
-        # Удаляем сообщение очереди
         last_msg_id = await self.repo.get_queue_message_id(ctx.chat_id, ctx.queue_id)
         if last_msg_id:
             await safe_delete(self.bot, ctx, last_msg_id)

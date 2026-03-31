@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
@@ -136,9 +136,13 @@ class QueueRepository:
             raise QueueNotFoundError(f"queue ({queue_id}) not found in chat {chat_id}")
 
         queue = queues.get(queue_id, {})
+        last_modified = queue.get("last_modified")
 
-        return queue.get("last_modified")
+        if last_modified and last_modified.tzinfo is None:
+            last_modified = last_modified.replace(tzinfo=timezone.utc)
 
+        return last_modified.astimezone(timezone(timedelta(hours=3)))
+    
     async def get_queue_message_id(self, chat_id: int, queue_id: str) -> Optional[int]:
         """Получает message_id очереди."""
         doc = await self.get_chat(chat_id)

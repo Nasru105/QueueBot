@@ -10,8 +10,6 @@ from app.utils.utils import delete_message_later, split_text, with_ctx
 @with_ctx
 @admins_only
 async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
-    max_line = 0
-
     def format_log(log: dict) -> str:
         lines = []
 
@@ -28,19 +26,17 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
         if queue != "-":
             info_line.append(queue)
 
-        lines.append(f"🕒 {timestamp.strftime('%Y-%m-%d %H:%M:%S')} | {level}")
+        lines.append(f"🕒 {timestamp} | {level}")
         lines.append(f"🔹 {message}")
         if info_line:
             lines.append("🏷️ " + " | ".join(info_line))
         if actor != "-":
             lines.append(f"👤 {actor}")
 
-        nonlocal max_line
-        max_line = max([len(line) for line in lines])
-
         return "\n".join(lines)
 
     args = context.args
+    max_line = 23
     try:
         count = int(args[-1])
     except Exception:
@@ -55,11 +51,7 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
     sep = f"\n {'─' * max_line}\n"
 
     formatted = sep.join(format_logs)
-
-    # 🔥 Разбиваем на части
     parts = split_text(formatted, sep)
-
-    # 📨 Отправляем по очереди
     for part in parts:
         await delete_message_later(context, ctx, part or "Логи пусты.", 60)
 
@@ -80,9 +72,6 @@ async def get_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
             pass
         text += f"• {job.id}\n {local_time}\n\n"
 
-    # 🔥 Разбиваем на части
     parts = split_text(text)
-
-    # 📨 Отправляем по очереди
     for part in parts:
         await delete_message_later(context, ctx, part or "jobs пусты.", 60)

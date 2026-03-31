@@ -1,4 +1,5 @@
 import asyncio
+from datetime import timedelta, timezone
 import os
 import sys
 from pathlib import Path
@@ -73,7 +74,7 @@ async def run_bot_with_retries() -> None:
             q_logger = QueueLogger()
 
             queue_repo = QueueRepository(mongo_db.db)
-            scheduler = AsyncIOScheduler(timezone="UTC")
+            scheduler = AsyncIOScheduler(timezone=timezone(timedelta(hours=3)))
             scheduler.start()
             app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
             queue_service = QueueFacadeService(bot=app.bot, repo=queue_repo, logger=q_logger, scheduler=scheduler)

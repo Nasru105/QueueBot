@@ -15,11 +15,9 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     Имя: из аргументов или автогенерация.
     """
     flags = {"-h": 0, "-s": 0}
-
     args_parts, parsed_flags = ArgumentParser.parse_flags_args(context.args, flags)
-
     queue_service: QueueFacadeService = context.bot_data["queue_service"]
-    # Определяем имя очереди
+
     if args_parts:
         queue_name = " ".join(args_parts)
     else:
@@ -33,7 +31,7 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         expires_in_seconds = (hours * 3600) + seconds
 
         if expires_in_seconds == 0:
-            expires_in_seconds = 86400
+            expires_in_seconds = 3600 * 24 * 3
     except (ValueError, TypeError):
         await delete_message_later(context, ctx, "параметр -h должен быть целым числом, обозначающим часы")
         return
@@ -52,8 +50,6 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     Показывает меню со всеми очередями.
     Если нет — временное сообщение.
     """
-
-    # Удаляем старое меню
     queue_service: QueueFacadeService = context.bot_data["queue_service"]
     last_queues_id = await queue_service.repo.get_list_message_id(ctx.chat_id)
     if last_queues_id:

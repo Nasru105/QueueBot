@@ -1,3 +1,4 @@
+from datetime import timedelta, timezone
 import sys
 from functools import partial
 
@@ -6,9 +7,7 @@ from loguru import logger
 from app.queues.models import ActionContext
 
 logger.remove()
-
 logger.configure(extra={"chat_title": "-", "queue": "-", "actor": "-"})
-
 logger.add(
     sys.stdout,
     format="<green>{time:DD.MM.YYYY HH:mm:ss}</green> | <level>{level: <8}</level> | {extra[chat_title]} | {extra[queue]} | <cyan>{message}</cyan>",
