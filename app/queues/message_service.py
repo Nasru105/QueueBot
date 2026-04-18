@@ -19,7 +19,7 @@ class QueueMessageService:
         self.repo: QueueRepository = repo
         self.logger: QueueLogger = logger
 
-    async def send_queue_message(self, ctx: ActionContext, text: str, keyboard, context: ContextTypes.DEFAULT_TYPE):
+    async def send_queue_message(self, ctx: ActionContext, text: str, keyboard, context: ContextTypes.DEFAULT_TYPE, reply_to_message_id=None):
         """
         Отправить сообщение о очереди: при наличии старого — удалить.
         Сохраняет message_id в repo.
@@ -33,6 +33,7 @@ class QueueMessageService:
                 chat_id=ctx.chat_id,
                 text=text,
                 parse_mode="MarkdownV2",
+                reply_to_message_id=reply_to_message_id,
                 reply_markup=keyboard,
                 message_thread_id=ctx.thread_id,
                 disable_notification=True,

@@ -1,3 +1,4 @@
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -65,11 +66,6 @@ async def get_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
     text = "Активные задачи:\n\n"
     for job in scheduler.get_jobs():
         local_time = job.trigger
-        try:
-            next_run = job.next_run_time
-            text += f"• {job.id}\n {next_run}\n\n"
-        except:
-            pass
         text += f"• {job.id}\n {local_time}\n\n"
 
     parts = split_text(text)

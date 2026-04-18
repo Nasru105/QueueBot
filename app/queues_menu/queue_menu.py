@@ -1,4 +1,5 @@
 # import traceback
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -19,7 +20,8 @@ async def handle_queue_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     ctx.queue_name = queue.name
 
     if action == "refresh":
-        await queue_service.send_queue_message(ctx, context)
+        reply_to_message_id = update.callback_query.message.reply_to_message.message_id if update.callback_query.message.reply_to_message else None
+        await queue_service.send_queue_message(ctx, context, reply_to_message_id)
 
     elif action == "swap":
         members = queue.members

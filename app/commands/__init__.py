@@ -1,4 +1,6 @@
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram import Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from loguru import logger
 
 from app.commands.admin import (
     delete_all_queues,
@@ -15,6 +17,12 @@ from app.commands.queue import chat_nickname, create, global_nickname, queues
 from app.commands.reports import get_jobs, get_logs
 from app.queues.router import queue_router
 from app.queues_menu.router import menu_router
+
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Exception:", exc_info=context.error)
+    raise
+
 
 
 def register_handlers(app: Application):
@@ -43,6 +51,7 @@ def register_handlers(app: Application):
     app.add_handler(CallbackQueryHandler(queue_router, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(menu_router, pattern=r"^menu\|"))
 
+    app.add_error_handler(error_handler)
 
 async def set_commands(app: Application):
     await app.bot.set_my_commands(

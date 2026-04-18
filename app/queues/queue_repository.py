@@ -52,22 +52,34 @@ class QueueRepository:
         queue = queues.setdefault(queue_id, {})
         members = queue.setdefault("members", [])
 
-        if any(member.get("user_id") == user_id for member in members):
-            raise UserAlreadyExistsError(f"user {user_id} already in queue")
-
+        for member in members:
+            if member.get("user_id") == user_id and member.get("display_name") != display_name:
+                member["display_name"] = display_name
+            elif member.get("display_name") == display_name and member.get("user_id") is None:
+                member["user_id"] = user_id
+            else:
+                continue
+            queue["last_modified"] = get_now()
+            await self.update_chat(chat_id, {f"queues.{queue_id}": queue})
+            raise UserAlreadyExistsError(f"user {display_name} already in queue")
+        
         members.append({"user_id": user_id, "display_name": display_name})
         queue["last_modified"] = get_now()
         await self.update_chat(chat_id, {f"queues.{queue_id}": queue})
 
         return len(members)
 
-    async def remove_from_queue(self, chat_id: int, queue_id: str, user_id: int) -> Optional[int]:
+    async def remove_from_queue(self, chat_id: int, queue_id: str, user_id: int, display_name: str) -> int:
         doc = await self.get_chat(chat_id)
         queues = doc.setdefault("queues", {})
         queue = queues.setdefault(queue_id, {})
         members = queue.setdefault("members", [])
 
-        idx = next((i for i, user in enumerate(members) if user.get("user_id") == user_id), None)
+        for i, member in enumerate(members):
+            if member.get("user_id") == user_id or (member.get("display_name") == display_name and member.get("user_id") is None):
+                idx = i
+                break
+
         if idx is None:
             raise UserNotFoundError(f"user id '{user_id}' not found in queue '{queue_id}'")
 

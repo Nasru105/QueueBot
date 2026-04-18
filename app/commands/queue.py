@@ -31,7 +31,7 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         expires_in_seconds = (hours * 3600) + seconds
 
         if expires_in_seconds == 0:
-            expires_in_seconds = 3600 * 24 * 3
+            expires_in_seconds = 3600 * 24 * 1
     except (ValueError, TypeError):
         await delete_message_later(context, ctx, "параметр -h должен быть целым числом, обозначающим часы")
         return
@@ -41,7 +41,7 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
 
     if not queue_id:
         await delete_message_later(context, ctx, f"Очередь с именем {ctx.queue_name} уже существет")
-    await queue_service.send_queue_message(ctx, context)
+    await queue_service.send_queue_message(ctx, context, update.message.reply_to_message.message_id if update.message.reply_to_message else None)
 
 
 @with_ctx
@@ -62,6 +62,7 @@ async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
         sent = await context.bot.send_message(
             chat_id=ctx.chat_id,
             text="Выберите очередь:",
+            reply_to_message_id=update.message.reply_to_message.message_id if update.message.reply_to_message else None,
             reply_markup=await queues_menu_keyboard(queues),
             message_thread_id=ctx.thread_id,
             disable_notification=True,

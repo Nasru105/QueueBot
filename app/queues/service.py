@@ -60,9 +60,9 @@ class QueueFacadeService:
 
     async def leave_from_queue(self, ctx: ActionContext, user: User) -> int:
         try:
-            position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_id, user.id)
+            display_name = await self.user_service.get_user_display_name(user, ctx.chat_id)
+            position = await self.repo.remove_from_queue(ctx.chat_id, ctx.queue_id, user.id, display_name)
             if position:
-                display_name = await self.user_service.get_user_display_name(user, ctx.chat_id)
                 await self.logger.leaved(ctx, display_name, position)
             return position
         except QueueError as ex:
@@ -148,12 +148,12 @@ class QueueFacadeService:
         await self.logger.replaced(ctx, name1, pos1, name2, pos2)
         return pos1, pos2, name1, name2
 
-    async def send_queue_message(self, ctx: ActionContext, context):
+    async def send_queue_message(self, ctx: ActionContext, context, reply_to_message_id=None):
         try:
             queue = await self.repo.get_queue(ctx.chat_id, ctx.queue_id)
             text = self.presenter.format_queue_text(queue)
             keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
-            return await self.message_service.send_queue_message(ctx, text, keyboard, context)
+            return await self.message_service.send_queue_message(ctx, text, keyboard, context, reply_to_message_id)
         except QueueError as ex:
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 

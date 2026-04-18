@@ -1,4 +1,4 @@
-from datetime import timedelta, timezone
+from datetime import timedelta
 import sys
 from functools import partial
 
@@ -21,7 +21,7 @@ async def mongo_sink(mongo_db, message):
         record = message.record
         extra = record.get("extra", {})
         document = {
-            "timestamp": record["time"].strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": (record["time"] + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
             "level": record["level"].name,
             "message": record["message"],
             "chat_title": extra.get("chat_title", "-"),

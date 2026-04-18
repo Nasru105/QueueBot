@@ -1,11 +1,11 @@
 import asyncio
+import httpx
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import List
 
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
-
 from app.queues.models import ActionContext, Member
 from app.services.logger import QueueLogger
 
@@ -60,10 +60,12 @@ def has_user(members: List[Member], user_id, display_name):
     return False
 
 
-# Безопасное удаление сообщения.
 async def safe_delete(bot, ctx: ActionContext, message_id):
     try:
         await bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
+    except httpx.ConnectError as e:
+        await asyncio.sleep(5)
+        await safe_delete(bot, ctx, message_id)
     except Exception as e:
         await QueueLogger.log(ctx, action=f"Не удалось удалить сообщение {message_id}: {e}", level="WARNING")
 
