@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
@@ -19,7 +21,7 @@ async def handle_queues_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
         queue = await queue_service.repo.get_queue(ctx.chat_id, ctx.queue_id)
         ctx.queue_name = queue.name
         expiration_time = await queue_service.repo.get_queue_expiration(ctx.chat_id, ctx.queue_id)
-        expiration_time = expiration_time.strftime("%d.%m.%Y %H:%M:%S")
+        expiration_time = (expiration_time  + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M:%S")
         text = escape_markdown(f"Действия с {ctx.queue_name}\n\nУдаление запланировано на {expiration_time}", version=2)
         await query.edit_message_text(
             text=text, parse_mode="MarkdownV2", reply_markup=await queue_menu_keyboard(ctx.queue_id)

@@ -57,11 +57,14 @@ class QueueRepository:
                 member["display_name"] = display_name
             elif member.get("display_name") == display_name and member.get("user_id") is None:
                 member["user_id"] = user_id
+            elif member.get("user_id") == user_id or member.get("display_name") == display_name:
+                raise UserAlreadyExistsError(f"user {display_name} already in queue")
             else:
                 continue
+            
             queue["last_modified"] = get_now()
             await self.update_chat(chat_id, {f"queues.{queue_id}": queue})
-            raise UserAlreadyExistsError(f"user {display_name} already in queue")
+            return len(members)
         
         members.append({"user_id": user_id, "display_name": display_name})
         queue["last_modified"] = get_now()

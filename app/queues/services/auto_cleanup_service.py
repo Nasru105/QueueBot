@@ -138,6 +138,7 @@ class QueueAutoCleanupService:
         last_modified = await self.repo.get_last_modified_time(ctx.chat_id, ctx.queue_id)
         now = get_now()
         # если очередь обновлялась в последний час — откладываем удаление ещё на час
+        await self.logger.log(ctx, f"{last_modified=}, {now=}, {now - last_modified < timedelta(hours=1)}", "CRITICAL")
         if last_modified and now - last_modified < timedelta(hours=1):
             await self.reschedule_expiration(ctx, 3600)
             return
