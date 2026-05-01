@@ -1,7 +1,7 @@
 import asyncio
-from datetime import timedelta, timezone
 import os
 import sys
+from datetime import timedelta, timezone
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,7 +17,6 @@ from app.commands import register_handlers, set_commands
 from app.queues.queue_repository import QueueRepository
 from app.queues.service import QueueFacadeService
 from app.services.logger import QueueLogger, setup_logger
-
 from app.services.mongo_storage import MongoDatabase
 
 load_dotenv()
@@ -33,24 +32,20 @@ RETRY_DELAY = 5
 # --- ИЗМЕНЕНИЕ: Функция принимает зависимости ---
 async def start_application(app: Application, mongo_db: MongoDatabase, queue_service: QueueFacadeService) -> None:
     """Основная логика запуска приложения"""
-    logger.info("Проверка индексов MongoDB...")
     await mongo_db.ensure_indexes()
 
-    logger.info("Установка команд и регистрация обработчиков...")
     await set_commands(app)
-    register_handlers(app)  # Передаем сервис в обработчики
+    register_handlers(app)
 
-    logger.info("Инициализация и запуск приложения Telegram...")
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=False)
     logger.success("Бот успешно запущен и принимает сообщения")
 
     try:
-        logger.info("Восстановление задач авто-удаления...")
         await queue_service.auto_cleanup_service.restore_all_expirations()
     except Exception as e:
-        logger.warning(f"Ошибка восстановления таймеров: {e}")
+        logger.warning(f"Ошибка восстановления задач авто-удаления: {e}")
 
     stop_event = asyncio.Event()
     await stop_event.wait()
@@ -109,10 +104,6 @@ async def run_bot_with_retries() -> None:
 
 def main() -> None:
     try:
-        # На Windows иногда нужен особый Policy для EventLoop
-        if sys.platform == "win32":
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
         asyncio.run(run_bot_with_retries())
 
     except KeyboardInterrupt:

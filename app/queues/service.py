@@ -94,9 +94,7 @@ class QueueFacadeService:
             await self.logger.inserted(ctx, user_name, new_position)
         return old_position, new_position
 
-    async def remove_from_queue(
-        self, ctx: ActionContext, pos: int = None, user_name: str = None
-    ) -> tuple[Optional[str], Optional[int]]:
+    async def remove_from_queue(self, ctx: ActionContext, pos: int = None, user_name: str = None) -> tuple[Optional[str], Optional[int]]:
         try:
             queue = await self.repo.get_queue_by_name(ctx.chat_id, ctx.queue_name)
             ctx.queue_id = queue.id
@@ -155,6 +153,7 @@ class QueueFacadeService:
             keyboard = self.presenter.build_queue_keyboard(ctx.queue_id)
             return await self.message_service.send_queue_message(ctx, text, keyboard, context, reply_to_message_id)
         except QueueError as ex:
+            context.chat_data["queues_update_count"].pop(ctx.queue_id, None)
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def update_queue_message(self, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):

@@ -39,8 +39,6 @@ async def setup_logger(mongo_db):
         mongo_sink_with_db = partial(mongo_sink, mongo_db)
 
         logger.add(mongo_sink_with_db, level="INFO", enqueue=True)
-
-        logger.info("Система логирования инициализирована")
     except Exception as e:
         logger.error(f"Failed to setup Mongo logging: {e}")
 

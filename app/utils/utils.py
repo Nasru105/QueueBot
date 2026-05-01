@@ -1,52 +1,48 @@
 import asyncio
-import httpx
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import List
 
+import httpx
 from telegram import Chat, Update, User
 from telegram.ext import ContextTypes
+
 from app.queues.models import ActionContext, Member
 from app.services.logger import QueueLogger
 
 
-def with_ctx(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        chat: Chat = update.effective_chat
-        user = update.effective_user
+def with_ctx(is_delete_update_message=True):
+    def outer(func):
+        @wraps(func)
+        async def inner(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+            chat: Chat = update.effective_chat
+            user = update.effective_user
 
-        ctx = ActionContext(
-            chat_id=chat.id,
-            chat_title=chat.title or chat.username or "Личный чат",
-            queue_name="",
-            actor=user.username or strip_user_full_name(user),
-            thread_id=update.message.message_thread_id
-            if update.message
-            else update.callback_query.message.message_thread_id,
-        )
+            ctx = ActionContext(
+                chat_id=chat.id,
+                chat_title=chat.title or chat.username or "Личный чат",
+                queue_name="",
+                actor=user.username or strip_user_full_name(user),
+                thread_id=update.message.message_thread_id if update.message else update.callback_query.message.message_thread_id,
+            )
 
-        if update.message:
-            message_id: int = update.message.message_id
-            await safe_delete(context.bot, ctx, message_id)
+            if is_delete_update_message and update.message:
+                message_id: int = update.message.message_id
+                await safe_delete(context.bot, ctx, message_id)
 
-        kwargs["ctx"] = ctx
+            kwargs["ctx"] = ctx
 
-        return await func(update, context, *args, **kwargs)
+            return await func(update, context, *args, **kwargs)
 
-    return wrapper
+        return inner
+
+    return outer
 
 
 def strip_user_full_name(user: User) -> str:
     last_name = user.last_name.strip() if user.last_name else ""
     first_name = user.first_name.strip() if user.first_name else ""
-    return (
-        f"{last_name} {first_name}".strip()
-        if last_name or first_name
-        else user.username
-        if user.username
-        else str(user.id)
-    )
+    return f"{last_name} {first_name}".strip() if last_name or first_name else user.username if user.username else str(user.id)
 
 
 # helper to check presence by user_id
@@ -63,7 +59,7 @@ def has_user(members: List[Member], user_id, display_name):
 async def safe_delete(bot, ctx: ActionContext, message_id):
     try:
         await bot.delete_message(chat_id=ctx.chat_id, message_id=message_id)
-    except httpx.ConnectError as e:
+    except httpx.ConnectError:
         await asyncio.sleep(5)
         await safe_delete(bot, ctx, message_id)
     except Exception as e:
@@ -118,7 +114,7 @@ def split_text(text: str, end="\n──────────────\n", 
     """Разбивает текст на части, чтобы не превышать лимит Telegram."""
     parts = []
     while len(text) > max_len:
-        cut = text.rfind(end, 0, max_len)  # разрезать по логам
+        cut = text.rfind(end, 0, max_len)
         if cut == -1:
             cut = max_len
         parts.append(text[:cut])

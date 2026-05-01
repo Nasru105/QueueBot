@@ -1,4 +1,3 @@
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -8,7 +7,7 @@ from app.queues.service import QueueFacadeService
 from app.utils.utils import delete_message_later, split_text, with_ctx
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     def format_log(log: dict) -> str:
@@ -57,7 +56,7 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
         await delete_message_later(context, ctx, part or "Логи пусты.", 60)
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def get_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     queue_service: QueueFacadeService = context.bot_data["queue_service"]

@@ -9,7 +9,7 @@ from app.services.locks import get_chat_lock
 from app.utils.utils import safe_delete, with_ctx
 
 
-@with_ctx
+@with_ctx()
 async def queue_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     """
     Обрабатывает нажатие кнопок для конкретной очереди.
@@ -28,7 +28,7 @@ async def queue_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     except QueueNotFoundError:
         await safe_delete(context.bot, ctx, update.callback_query.message.message_id)
         return
-    
+
     ctx.queue_name = queue.name
     ctx.queue_id = queue_id
 
@@ -40,6 +40,5 @@ async def queue_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
         elif action == "swap":
             await swap_router(update, context, ctx, queue, rest_args)
             return
-
 
     await queue_service.update_queue_message(context, ctx)

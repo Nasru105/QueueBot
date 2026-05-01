@@ -4,6 +4,7 @@ from functools import wraps
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
+from app.queues.errors import QueueNotFoundError
 from app.queues.models import ActionContext
 from app.queues.service import QueueFacadeService
 from app.services.argument_parser import ArgumentParser
@@ -32,7 +33,7 @@ def admins_only(func):
     return wrapper
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     if not context.args:
@@ -41,8 +42,9 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
 
     queue_service: QueueFacadeService = context.bot_data["queue_service"]
     queue_name = " ".join(context.args)
-    queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
-    if not queue:
+    try:
+        queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
+    except QueueNotFoundError:
         await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
         return
 
@@ -57,7 +59,7 @@ async def delete_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     await queue_service.delete_queue(context, ctx)
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     # Удаляем меню
@@ -78,7 +80,7 @@ async def delete_all_queues(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await queue_service.delete_queue(context, ctx)
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
@@ -102,14 +104,12 @@ async def insert_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
     await queue_service.update_queue_message(context, ctx)
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
     if len(args) < 2:
-        await delete_message_later(
-            context, ctx, "Использование:\n /remove <Имя очереди> <Имя пользователя или Позиция>"
-        )
+        await delete_message_later(context, ctx, "Использование:\n /remove <Имя очереди> <Имя пользователя или Позиция>")
         return
     queue_service: QueueFacadeService = context.bot_data["queue_service"]
 
@@ -132,7 +132,7 @@ async def remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: A
         await delete_message_later(context, ctx, "Пользователь не найден в очереди.")
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
@@ -160,7 +160,7 @@ async def replace_users(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx:
     await queue_service.update_queue_message(context, ctx)
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     args = context.args
@@ -189,7 +189,7 @@ async def rename_queue(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
     await queue_service.update_queue_message(context, ctx)
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     """
@@ -209,28 +209,24 @@ async def set_queue_expiration_time(update: Update, context: ContextTypes.DEFAUL
 
         queue_service: QueueFacadeService = context.bot_data["queue_service"]
         queue_name = " ".join(context.args[:-1])
-        queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
-        ctx.queue_name = queue_name
-        ctx.queue_id = queue.id
-
-        if not queue:
-            await delete_message_later(context, ctx, "Очередь не найдена.")
+        try:
+            queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
+        except QueueNotFoundError:
+            await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
             return
-
+        ctx.queue_name = queue_name
         ctx.queue_id = queue.id
 
         # Устанавливаем новое время
         await queue_service.auto_cleanup_service.reschedule_expiration(ctx, hours * 3600)
 
-        await delete_message_later(
-            context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} ч."
-        )
+        await delete_message_later(context, ctx, f"Время автоудаления очереди '{ctx.queue_name}' установлено на {hours} ч.")
 
     except ValueError:
         await delete_message_later(context, ctx, "Неверный формат числа. Введите целое число часов.")
 
 
-@with_ctx
+@with_ctx()
 @admins_only
 async def set_queue_description(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     if len(context.args) < 1:
@@ -261,3 +257,58 @@ async def set_queue_description(update: Update, context: ContextTypes.DEFAULT_TY
 
     await queue_service.set_queue_description(ctx, description)
     await queue_service.update_queue_message(context, ctx)
+
+
+@with_ctx()
+@admins_only
+async def set_queue_update_count(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    if not context.args:
+        del context.chat_data["queues_update_count"]
+        await delete_message_later(context, ctx, "Автоматическое обновление очередей отключено.")
+        return
+
+    count = None
+    try:
+        count = abs(int(context.args[-1]))
+        queue_name = " ".join(context.args[:-1])
+    except ValueError:
+        queue_name = " ".join(context.args)
+
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
+    if queue_name:
+        try:
+            queue = await queue_service.repo.get_queue_by_name(ctx.chat_id, queue_name)
+        except QueueNotFoundError:
+            await delete_message_later(context, ctx, f"Очередь {queue_name} не найдена.")
+            return
+        queues = {queue.id: queue}
+    else:
+        queues = await queue_service.repo.get_all_queues(ctx.chat_id)
+
+    queues_update_count = context.chat_data.get("queues_update_count", {})
+    for queue in queues.values():
+        if count:
+            queues_update_count[queue.id] = {"current": 0, "limit": count}
+            await delete_message_later(context, ctx, f"Автоматическое обновление очереди '{queue.name}' установлено на {count} сообщений")
+        else:
+            queues_update_count.pop(queue.id, None)
+            await delete_message_later(context, ctx, f"Автоматическое обновление очереди '{queue.name}' отключено")
+        context.chat_data["queues_update_count"] = queues_update_count
+
+
+@with_ctx(is_delete_update_message=False)
+async def message_counter(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+    if context.chat_data.get("queues_update_count") is None:
+        return
+
+    queues = list(context.chat_data["queues_update_count"].items())
+    queue_service: QueueFacadeService = context.bot_data["queue_service"]
+
+    for queue_id, data in queues:
+        data["current"] += 1
+        ctx.queue_id = queue_id
+
+        if data["current"] >= data["limit"]:
+            data["current"] = 0
+
+            await queue_service.send_queue_message(ctx, context)

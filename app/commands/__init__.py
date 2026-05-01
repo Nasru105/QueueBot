@@ -1,16 +1,18 @@
-from telegram import Update
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 from loguru import logger
+from telegram import Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from app.commands.admin import (
     delete_all_queues,
     delete_queue,
     insert_user,
+    message_counter,
     remove_user,
     rename_queue,
     replace_users,
     set_queue_description,
     set_queue_expiration_time,
+    set_queue_update_count,
 )
 from app.commands.help import commands_list, help_command, start
 from app.commands.queue import chat_nickname, create, global_nickname, queues
@@ -20,9 +22,8 @@ from app.queues_menu.router import menu_router
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error("Exception:", exc_info=context.error)
+    logger.exception(f"Exception: {context.error}")
     raise
-
 
 
 def register_handlers(app: Application):
@@ -44,6 +45,7 @@ def register_handlers(app: Application):
 
     app.add_handler(CommandHandler("set_description", set_queue_description))
     app.add_handler(CommandHandler("set_expire_time", set_queue_expiration_time))
+    app.add_handler(CommandHandler("set_update_count", set_queue_update_count))
 
     app.add_handler(CommandHandler("logs", get_logs))
     app.add_handler(CommandHandler("jobs", get_jobs))
@@ -51,7 +53,9 @@ def register_handlers(app: Application):
     app.add_handler(CallbackQueryHandler(queue_router, pattern=r"^queue\|"))
     app.add_handler(CallbackQueryHandler(menu_router, pattern=r"^menu\|"))
 
+    app.add_handler(MessageHandler(filters.ALL, message_counter))
     app.add_error_handler(error_handler)
+
 
 async def set_commands(app: Application):
     await app.bot.set_my_commands(

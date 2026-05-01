@@ -8,7 +8,7 @@ from app.services.argument_parser import ArgumentParser
 from app.utils.utils import delete_message_later, safe_delete, with_ctx
 
 
-@with_ctx
+@with_ctx()
 async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Создаёт новую очередь.
@@ -44,7 +44,7 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     await queue_service.send_queue_message(ctx, context, update.message.reply_to_message.message_id if update.message.reply_to_message else None)
 
 
-@with_ctx
+@with_ctx()
 async def queues(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Показывает меню со всеми очередями.
@@ -97,13 +97,13 @@ async def nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Acti
     await delete_message_later(context, ctx, response)
 
 
-@with_ctx
+@with_ctx()
 async def chat_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """Устанавливает никнейм пользователя в очередях."""
     await nickname(update, context, ctx=ctx, global_mode=False)
 
 
-@with_ctx
+@with_ctx()
 async def global_nickname(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """Устанавливает отображаемое имя пользователя в очередях."""
     await nickname(update, context, ctx=ctx, global_mode=True)

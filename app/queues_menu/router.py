@@ -10,7 +10,7 @@ from app.services.logger import QueueLogger
 from app.utils.utils import with_ctx
 
 
-@with_ctx
+@with_ctx()
 async def menu_router(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
     """Parse callback payload and dispatch to appropriate controller."""
     query = update.callback_query

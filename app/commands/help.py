@@ -147,6 +147,17 @@ class CommandHelp:
             "admin": True,
             "category": "Администрирование",
         },
+        "set_update_count": {
+            "description": "Автоматическое обновление очереди",
+            "usage": "/set_update_count [Очередь] [количество сообщений]",
+            "details": (
+                "Устанавливает автоматическое обновление очереди через указанное количество сообщений.",
+                "Без параметра [Очередь] для установки для всех очередей",
+                "Без параметра [количество сообщений] или со значением 0 для сброса автоматического обновления",
+            ),
+            "admin": True,
+            "category": "Администрирование",
+        },
     }
 
     @classmethod
@@ -237,7 +248,7 @@ class CommandHelp:
         return "\n".join(lines)
 
 
-@with_ctx
+@with_ctx()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Показывает приветственное сообщение.
@@ -267,7 +278,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionC
     )
 
 
-@with_ctx
+@with_ctx()
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     """
     Показывает справку по командам.
@@ -294,7 +305,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: 
         )
 
 
-@with_ctx
+@with_ctx()
 async def commands_list(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext) -> None:
     text = CommandHelp.format_all_commands()
 

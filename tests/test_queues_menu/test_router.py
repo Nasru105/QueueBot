@@ -14,7 +14,7 @@ from app.queues.models import ActionContext
 @pytest.fixture
 def bypass_decorator(mocker):
     """
-    Отключаем декоратор @with_ctx, чтобы тесты могли передавать мок ctx напрямую,
+    Отключаем декоратор @with_ctx(), чтобы тесты могли передавать мок ctx напрямую,
     не вызывая конфликта аргументов (TypeError: multiple values for argument 'ctx').
     """
     mocker.patch("app.utils.utils.with_ctx", side_effect=lambda func: func)
@@ -39,9 +39,7 @@ class TestMenuRouter:
         self.context.bot = AsyncMock()
 
         # Добавляем thread_id, так как он есть в определении модели
-        self.ctx = ActionContext(
-            chat_id=123, chat_title="Test Chat", queue_id="", queue_name="", actor="test_user", thread_id=None
-        )
+        self.ctx = ActionContext(chat_id=123, chat_title="Test Chat", queue_id="", queue_name="", actor="test_user", thread_id=None)
         return {
             "update": self.update,
             "context": self.context,
@@ -73,9 +71,7 @@ class TestMenuRouter:
         setup_common["update"].callback_query.data = "menu|queue|789|delete"
         with patch("app.queues_menu.router.handle_queue_menu", new_callable=AsyncMock) as mock_queue_handler:
             with patch("app.queues_menu.router.handle_queues_menu", new_callable=AsyncMock) as mock_queues_handler:
-                await bypass_decorator.menu_router(
-                    setup_common["update"], setup_common["context"], ctx=setup_common["ctx"]
-                )
+                await bypass_decorator.menu_router(setup_common["update"], setup_common["context"], ctx=setup_common["ctx"])
 
                 mock_queue_handler.assert_called_once()
                 mock_queues_handler.assert_not_called()
@@ -85,9 +81,7 @@ class TestMenuRouter:
         setup_common["update"].callback_query.data = "menu|queues|q1|get"
         with patch("app.queues_menu.router.handle_queue_menu", new_callable=AsyncMock) as mock_queue_handler:
             with patch("app.queues_menu.router.handle_queues_menu", new_callable=AsyncMock) as mock_queues_handler:
-                await bypass_decorator.menu_router(
-                    setup_common["update"], setup_common["context"], ctx=setup_common["ctx"]
-                )
+                await bypass_decorator.menu_router(setup_common["update"], setup_common["context"], ctx=setup_common["ctx"])
 
                 mock_queue_handler.assert_not_called()
                 mock_queues_handler.assert_called_once()
@@ -147,9 +141,7 @@ class TestMenuRouter:
             setup_common["update"].callback_query.data = f"menu|queue|{queue_id}|refresh"
             with patch("app.queues_menu.router.handle_queue_menu", new_callable=AsyncMock):
                 # Создаем новый ctx каждый раз для чистоты теста
-                ctx = ActionContext(
-                    chat_id=123, chat_title="Test", queue_id="", queue_name="", actor="user", thread_id=None
-                )
+                ctx = ActionContext(chat_id=123, chat_title="Test", queue_id="", queue_name="", actor="user", thread_id=None)
                 await bypass_decorator.menu_router(setup_common["update"], setup_common["context"], ctx=ctx)
                 assert ctx.queue_id == queue_id
 
@@ -167,8 +159,6 @@ class TestMenuRouter:
         for action in actions:
             setup_common["update"].callback_query.data = f"menu|queue|123|{action}"
             with patch("app.queues_menu.router.handle_queue_menu", new_callable=AsyncMock) as mock_handler:
-                await bypass_decorator.menu_router(
-                    setup_common["update"], setup_common["context"], ctx=setup_common["ctx"]
-                )
+                await bypass_decorator.menu_router(setup_common["update"], setup_common["context"], ctx=setup_common["ctx"])
 
                 assert mock_handler.call_args[0][3] == action
