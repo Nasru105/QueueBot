@@ -45,7 +45,7 @@ def register_handlers(app: Application):
 
     app.add_handler(CommandHandler("set_description", set_queue_description))
     app.add_handler(CommandHandler("set_expire_time", set_queue_expiration_time))
-    app.add_handler(CommandHandler("set_update_count", set_queue_update))
+    app.add_handler(CommandHandler("set_update", set_queue_update))
 
     app.add_handler(CommandHandler("logs", get_logs))
     app.add_handler(CommandHandler("jobs", get_jobs))

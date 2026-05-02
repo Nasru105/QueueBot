@@ -156,7 +156,7 @@ class QueueFacadeService:
         except QueueError as ex:
             context.chat_data["queues_update_count"].pop(ctx.queue_id, None)
             scheduler: AsyncIOScheduler = context.bot_data["scheduler"]
-            job_id = f"update_queue_{ctx.queue_id}"
+            job_id = f"update_{ctx.chat_id}_{ctx.queue_id}"
             if scheduler.get_job(job_id):
                 scheduler.remove_job(job_id)
 
