@@ -1,5 +1,5 @@
-from datetime import timedelta
 import sys
+from datetime import timedelta
 from functools import partial
 
 from loguru import logger
@@ -8,12 +8,6 @@ from app.queues.models import ActionContext
 
 logger.remove()
 logger.configure(extra={"chat_title": "-", "queue": "-", "actor": "-"})
-logger.add(
-    sys.stdout,
-    format="<green>{time:DD.MM.YYYY HH:mm:ss}</green> | <level>{level: <8}</level> | {extra[chat_title]} | {extra[queue]} | <cyan>{message}</cyan>",
-    level="INFO",
-    enqueue=True,
-)
 
 
 async def mongo_sink(mongo_db, message):
@@ -33,12 +27,19 @@ async def mongo_sink(mongo_db, message):
         print(f"Mongo logging error: {e}", file=sys.stderr)
 
 
-async def setup_logger(mongo_db):
+async def setup_logger(mongo_db, logger_level="INFO"):
     """Вызывается из bot.py после старта Event Loop"""
     try:
         mongo_sink_with_db = partial(mongo_sink, mongo_db)
 
         logger.add(mongo_sink_with_db, level="INFO", enqueue=True)
+        logger.add(
+            sys.stdout,
+            format="<green>{time:DD.MM.YYYY HH:mm:ss}</green> | <level>{level: <8}</level> | {extra[chat_title]} | {extra[queue]} | <cyan>{message}</cyan>",
+            level=logger_level,
+            enqueue=True,
+        )
+        logger.info("Система логирования инициализирована с уровнем: " + logger_level)
     except Exception as e:
         logger.error(f"Failed to setup Mongo logging: {e}")
 

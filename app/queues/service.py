@@ -1,5 +1,6 @@
 from typing import Optional
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import User
 from telegram.ext import ContextTypes
 
@@ -154,6 +155,11 @@ class QueueFacadeService:
             return await self.message_service.send_queue_message(ctx, text, keyboard, context, reply_to_message_id)
         except QueueError as ex:
             context.chat_data["queues_update_count"].pop(ctx.queue_id, None)
+            scheduler: AsyncIOScheduler = context.bot_data["scheduler"]
+            job_id = f"update_queue_{ctx.queue_id}"
+            if scheduler.get_job(job_id):
+                scheduler.remove_job(job_id)
+
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
 
     async def update_queue_message(self, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):

@@ -25,9 +25,6 @@ TOKEN = os.getenv("TOKEN")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "queue_bot_db")
 
-MAX_RETRIES = 15
-RETRY_DELAY = 5
-
 
 # --- ИЗМЕНЕНИЕ: Функция принимает зависимости ---
 async def start_application(app: Application, mongo_db: MongoDatabase, queue_service: QueueFacadeService) -> None:
@@ -57,49 +54,30 @@ async def run_bot_with_retries() -> None:
         logger.critical("Переменная окружения TOKEN не найдена!")
         return
 
-    attempt = 0
-    while attempt < MAX_RETRIES:
-        mongo_db = None
-        app = None
-        try:
-            mongo_db = MongoDatabase()
-            await mongo_db.connect()
+    mongo_db = None
+    app = None
+    try:
+        mongo_db = MongoDatabase()
+        await mongo_db.connect()
 
-            await setup_logger(mongo_db)
-            q_logger = QueueLogger()
+        logger_level = os.getenv("LOGGER_LEVEL", "INFO")
+        await setup_logger(mongo_db, logger_level)
+        q_logger = QueueLogger()
 
-            queue_repo = QueueRepository(mongo_db.db)
-            scheduler = AsyncIOScheduler(timezone=timezone(timedelta(hours=3)))
-            scheduler.start()
-            app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
-            queue_service = QueueFacadeService(bot=app.bot, repo=queue_repo, logger=q_logger, scheduler=scheduler)
-            app.bot_data["queue_service"] = queue_service
+        queue_repo = QueueRepository(mongo_db.db)
+        scheduler = AsyncIOScheduler(timezone=timezone(timedelta(hours=3)))
+        scheduler.start()
+        app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
+        queue_service = QueueFacadeService(bot=app.bot, repo=queue_repo, logger=q_logger, scheduler=scheduler)
+        app.bot_data["queue_service"] = queue_service
+        app.bot_data["scheduler"] = scheduler
 
-            await start_application(app, mongo_db, queue_service)
+        await start_application(app, mongo_db, queue_service)
 
-        except asyncio.CancelledError:
-            logger.info("Получен сигнал остановки работы.")
-            break
-        except Exception:
-            attempt += 1
-            logger.exception(f"Критическая ошибка (попытка {attempt}/{MAX_RETRIES}):")
-            if attempt < MAX_RETRIES:
-                delay = RETRY_DELAY * (2 ** (attempt - 1))
-                logger.warning(f"Перезапуск через {delay} секунд...")
-                await asyncio.sleep(delay)
-            else:
-                logger.critical("Исчерпан лимит попыток перезапуска. Выход.")
-                break
-        finally:
-            if app and app.updater and app.updater.running:
-                await app.updater.stop()
-            if app and app.running:
-                await app.shutdown()
-            if mongo_db:
-                await mongo_db.close()
-            if scheduler.running:
-                scheduler.shutdown()
-            logger.info("Ресурсы освобождены.")
+    except asyncio.CancelledError:
+        logger.info("Получен сигнал остановки работы.")
+    except Exception as e:
+        logger.exception(f"Критическая ошибка при запуске: {e}")
 
 
 def main() -> None:

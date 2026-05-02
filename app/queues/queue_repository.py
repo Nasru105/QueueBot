@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
-
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from telegram import User
 
@@ -61,11 +60,11 @@ class QueueRepository:
                 raise UserAlreadyExistsError(f"user {display_name} already in queue")
             else:
                 continue
-            
+
             queue["last_modified"] = get_now()
             await self.update_chat(chat_id, {f"queues.{queue_id}": queue})
             return len(members)
-        
+
         members.append({"user_id": user_id, "display_name": display_name})
         queue["last_modified"] = get_now()
         await self.update_chat(chat_id, {f"queues.{queue_id}": queue})
@@ -157,16 +156,14 @@ class QueueRepository:
             last_modified = last_modified.replace(tzinfo=timezone.utc)
 
         return last_modified.astimezone(timezone(timedelta(hours=3)))
-    
+
     async def get_queue_message_id(self, chat_id: int, queue_id: str) -> Optional[int]:
         """Получает message_id очереди."""
         doc = await self.get_chat(chat_id)
         queues = doc.setdefault("queues", {})
 
         if queue_id not in queues:
-            raise QueueNotFoundError(
-                f"Failed to get last_queue_message_id: queue ({queue_id}) not found in chat {chat_id}"
-            )
+            raise QueueNotFoundError(f"Failed to get last_queue_message_id: queue ({queue_id}) not found in chat {chat_id}")
 
         queue = queues.get(queue_id, {})
         return queue.get("last_queue_message_id")
@@ -176,9 +173,7 @@ class QueueRepository:
         queues = doc.setdefault("queues", {})
 
         if queue_id not in queues:
-            raise QueueNotFoundError(
-                f"Failed to set last_queue_message_id: queue ({queue_id}) not found in chat {chat_id}"
-            )
+            raise QueueNotFoundError(f"Failed to set last_queue_message_id: queue ({queue_id}) not found in chat {chat_id}")
         queue = queues.setdefault(queue_id, {})
         queue["last_queue_message_id"] = msg_id
         await self.update_chat(chat_id, {f"queues.{queue_id}": queue})
@@ -224,10 +219,7 @@ class QueueRepository:
     async def get_all_chats_with_queues(self) -> list[dict]:
         """Возвращает список документов: {'chat_id': int, 'chat_title': str, 'queues': {...}}"""
         cur = self.queue_collection.find({}, {"chat_id": 1, "queues": 1, "chat_title": 1})
-        return [
-            {"chat_id": doc.get("chat_id"), "chat_title": doc.get("chat_title"), "queues": doc.get("queues", {})}
-            async for doc in cur
-        ]
+        return [{"chat_id": doc.get("chat_id"), "chat_title": doc.get("chat_title"), "queues": doc.get("queues", {})} async for doc in cur]
 
     async def rename_queue(self, chat_id: int, old_name: str, new_name: str):
         doc = await self.get_chat(chat_id)
@@ -266,13 +258,9 @@ class QueueRepository:
             }
             await self.user_collection.insert_one(doc_user)
         elif doc_user.get("username", None) != user.username:
-            await self.user_collection.update_one(
-                {"user_id": user.id}, {"$set": {"username": user.username}}, upsert=True
-            )
+            await self.user_collection.update_one({"user_id": user.id}, {"$set": {"username": user.username}}, upsert=True)
 
         return doc_user
 
     async def update_user_display_name(self, user_id: int, display_names: Dict[str, str]):
-        await self.user_collection.update_one(
-            {"user_id": user_id}, {"$set": {"display_names": display_names}}, upsert=True
-        )
+        await self.user_collection.update_one({"user_id": user_id}, {"$set": {"display_names": display_names}}, upsert=True)

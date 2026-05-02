@@ -1,6 +1,10 @@
 import re
+from copy import deepcopy
 from functools import wraps
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from loguru import logger
 from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
@@ -261,18 +265,18 @@ async def set_queue_description(update: Update, context: ContextTypes.DEFAULT_TY
 
 @with_ctx()
 @admins_only
-async def set_queue_update_count(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
-    if not context.args:
+async def set_queue_update(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: ActionContext):
+
+    args = context.args
+    if not args:
         del context.chat_data["queues_update_count"]
         await delete_message_later(context, ctx, "Автоматическое обновление очередей отключено.")
         return
 
-    count = None
-    try:
-        count = abs(int(context.args[-1]))
-        queue_name = " ".join(context.args[:-1])
-    except ValueError:
-        queue_name = " ".join(context.args)
+    flags = {"-c": 0, "-m": 0}
+    args_parts, parsed_flags = ArgumentParser.parse_flags_args(context.args, flags)
+    queue_name = " ".join(args_parts)
+    logger.debug(f"set_queue_update: {queue_name=}, {args_parts=}, {parsed_flags=}")
 
     queue_service: QueueFacadeService = context.bot_data["queue_service"]
     if queue_name:
@@ -285,15 +289,31 @@ async def set_queue_update_count(update: Update, context: ContextTypes.DEFAULT_T
     else:
         queues = await queue_service.repo.get_all_queues(ctx.chat_id)
 
+    count, minutes = abs(int(flags.get("-c"))), abs(int(flags.get("-m")))
     queues_update_count = context.chat_data.get("queues_update_count", {})
     for queue in queues.values():
+        job_id = f"update_queue_{queue.id}"
+        job_ctx = deepcopy(ctx)
+        job_ctx.queue_id, job_ctx.queue_name, job_ctx.actor = queue.id, queue.name, f"job_{job_id}"
         if count:
             queues_update_count[queue.id] = {"current": 0, "limit": count}
-            await delete_message_later(context, ctx, f"Автоматическое обновление очереди '{queue.name}' установлено на {count} сообщений")
+            await delete_message_later(context, job_ctx, f"Автоматическое обновление очереди '{queue.name}' установлено на {count} сообщений")
         else:
             queues_update_count.pop(queue.id, None)
-            await delete_message_later(context, ctx, f"Автоматическое обновление очереди '{queue.name}' отключено")
-        context.chat_data["queues_update_count"] = queues_update_count
+            await delete_message_later(context, job_ctx, f"Автоматическое обновление очереди '{queue.name}' по сообщениям  отключено")
+
+        scheduler: AsyncIOScheduler = context.bot_data["scheduler"]
+        if minutes:
+            scheduler.add_job(
+                queue_service.send_queue_message, trigger=IntervalTrigger(minutes=minutes), id=job_id, args=(job_ctx, context), replace_existing=True
+            )
+            await delete_message_later(context, job_ctx, f"Автоматическое обновление очереди '{queue.name}' установлено на {minutes} минут")
+        else:
+            if scheduler.get_job(job_id):
+                scheduler.remove_job(job_id)
+            await delete_message_later(context, job_ctx, f"Автоматическое обновление очереди '{queue.name}' по времени отключено")
+
+    context.chat_data["queues_update_count"] = queues_update_count
 
 
 @with_ctx(is_delete_update_message=False)
