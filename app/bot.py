@@ -16,6 +16,8 @@ if __package__ is None:
 from app.commands import register_handlers, set_commands
 from app.queues.queue_repository import QueueRepository
 from app.queues.service import QueueFacadeService
+from app.queues.services.subscription_service import QueueSubscriptionService
+from app.queues.subscription_repository import SubscriptionRepository
 from app.services.logger import QueueLogger, setup_logger
 from app.services.mongo_storage import MongoDatabase
 
@@ -68,7 +70,12 @@ async def run_bot_with_retries() -> None:
         scheduler = AsyncIOScheduler(timezone=timezone(timedelta(hours=3)))
         scheduler.start()
         app = ApplicationBuilder().token(TOKEN).read_timeout(30).write_timeout(30).build()
-        queue_service = QueueFacadeService(bot=app.bot, repo=queue_repo, logger=q_logger, scheduler=scheduler)
+        subscription_service = QueueSubscriptionService(app.bot, SubscriptionRepository(mongo_db.db))
+        queue_service = QueueFacadeService(
+            bot=app.bot, repo=queue_repo, logger=q_logger, scheduler=scheduler,
+            subscription_service=subscription_service,
+        )
+        app.bot_data["subscription_service"] = subscription_service
         app.bot_data["queue_service"] = queue_service
         app.bot_data["scheduler"] = scheduler
 

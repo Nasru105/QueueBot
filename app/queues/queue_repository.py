@@ -6,7 +6,7 @@ from telegram import User
 
 from app.utils.utils import get_now, strip_user_full_name
 
-from .errors import QueueNotFoundError, UserAlreadyExistsError, UserNotFoundError
+from .errors import QueueAlreadyExistsError, QueueNotFoundError, UserAlreadyExistsError, UserNotFoundError
 from .models import Queue
 
 
@@ -100,7 +100,7 @@ class QueueRepository:
 
         for queue in queues.values():
             if queue.get("name") == queue_name:
-                return queue.get("id")
+                raise QueueAlreadyExistsError(f"queue {queue_name!r} already exists in chat {chat_id}")
 
         queue_id = uuid4().hex[:8]
 

@@ -25,5 +25,8 @@ class MongoDatabase:
             self.client.close()
 
     async def ensure_indexes(self):
-        """Создаёт уникальный индекс по chat_id"""
+        """Создаёт уникальные индексы чатов и подписок."""
         await self.db["queue_data"].create_index("chat_id", unique=True)
+        await self.db["queue_subscriptions"].create_index(
+            [("chat_id", 1), ("user_id", 1)], unique=True
+        )

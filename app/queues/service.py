@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 
 from app.queues.queue_repository import QueueRepository
 from app.queues.services.auto_cleanup_service import QueueAutoCleanupService
+from app.queues.services.subscription_service import QueueSubscriptionService
 from app.services.logger import QueueLogger
 
 from .errors import InvalidPositionError, QueueError, UserNotFoundError
@@ -21,13 +22,14 @@ class QueueFacadeService:
     Компоненты (repo, presenter, message_service ...) инжектируются через конструктор.
     """
 
-    def __init__(self, bot, repo, logger, scheduler):
+    def __init__(self, bot, repo, logger, scheduler, subscription_service: Optional[QueueSubscriptionService] = None):
         self.repo: QueueRepository = repo
         self.presenter = QueuePresenter()
         self.message_service = QueueMessageService(repo, logger)
         self.user_service = UserService(repo)
         self.auto_cleanup_service = QueueAutoCleanupService(bot, repo, scheduler, logger)
         self.logger: QueueLogger = logger
+        self.subscription_service = subscription_service
 
     # ------ queue management (thin orchestrations) ------
     async def create_queue(self, context, ctx: ActionContext, expires_in):
@@ -38,6 +40,7 @@ class QueueFacadeService:
             await self.logger.log(ctx, "create queue")
         except QueueError as ex:
             await self.logger.log(ctx, f"{type(ex).__name__}: {ex}", "WARNING")
+            return None
         return queue_id
 
     async def delete_queue(self, context, ctx: ActionContext):

@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Chat, Update
 from telegram.ext import ContextTypes
 
 from app.queues.models import ActionContext
@@ -40,8 +40,20 @@ async def create(update: Update, context: ContextTypes.DEFAULT_TYPE, ctx: Action
     ctx.queue_id = queue_id
 
     if not queue_id:
-        await delete_message_later(context, ctx, f"Очередь с именем {ctx.queue_name} уже существет")
-    await queue_service.send_queue_message(ctx, context, update.message.reply_to_message.message_id if update.message.reply_to_message else None)
+        await delete_message_later(context, ctx, f"Очередь с именем {ctx.queue_name} уже существует")
+        return
+    message_id = await queue_service.send_queue_message(
+        ctx, context, update.message.reply_to_message.message_id if update.message.reply_to_message else None
+    )
+    if message_id and queue_service.subscription_service is not None:
+        chat = update.effective_chat
+        message_link = None
+        if chat.type == Chat.SUPERGROUP:
+            chat_path = chat.username or f"c/{str(chat.id)[4:]}"
+            message_link = f"https://t.me/{chat_path}/{message_id}"
+            if ctx.thread_id:
+                message_link += f"?thread={ctx.thread_id}"
+        context.application.create_task(queue_service.subscription_service.notify_queue_created(ctx, message_link))
 
 
 @with_ctx()

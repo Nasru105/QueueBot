@@ -17,6 +17,7 @@ from app.commands.admin import (
 from app.commands.help import commands_list, help_command, start
 from app.commands.queue import chat_nickname, create, global_nickname, queues
 from app.commands.reports import get_jobs, get_logs
+from app.commands.subscriptions import subscribe, unsubscribe
 from app.queues.router import queue_router
 from app.queues_menu.router import menu_router
 
@@ -33,6 +34,8 @@ def register_handlers(app: Application):
 
     app.add_handler(CommandHandler("create", create))
     app.add_handler(CommandHandler("queues", queues))
+    app.add_handler(CommandHandler("subscribe", subscribe))
+    app.add_handler(CommandHandler("unsubscribe", unsubscribe))
     app.add_handler(CommandHandler("nickname", chat_nickname))
     app.add_handler(CommandHandler("nickname_global", global_nickname))
 
